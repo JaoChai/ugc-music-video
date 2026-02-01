@@ -26,4 +26,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
+# Railway sets PORT env var
+ENV PORT=80
+
 CMD ["nginx", "-g", "daemon off;"]
