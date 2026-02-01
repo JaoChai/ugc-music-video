@@ -74,18 +74,24 @@ func main() {
 	sunoClient := kie.NewSunoClient(cfg.KIE.APIKey, cfg.KIE.BaseURL)
 	nanoBananaClient := kie.NewNanoBananaClient(cfg.KIE.APIKey, cfg.KIE.BaseURL)
 
-	// Create R2 client
-	r2Client, err := r2.NewClient(ctx, r2.Config{
-		AccountID:       cfg.R2.AccountID,
-		AccessKeyID:     cfg.R2.AccessKeyID,
-		SecretAccessKey: cfg.R2.SecretAccessKey,
-		BucketName:      cfg.R2.BucketName,
-		PublicURL:       cfg.R2.PublicURL,
-	})
-	if err != nil {
-		logger.Fatal("failed to create R2 client", zap.Error(err))
+	// Create R2 client (optional - skip if not configured)
+	var r2Client *r2.Client
+	if cfg.R2.AccountID != "" {
+		r2Client, err = r2.NewClient(ctx, r2.Config{
+			AccountID:       cfg.R2.AccountID,
+			AccessKeyID:     cfg.R2.AccessKeyID,
+			SecretAccessKey: cfg.R2.SecretAccessKey,
+			BucketName:      cfg.R2.BucketName,
+			PublicURL:       cfg.R2.PublicURL,
+		})
+		if err != nil {
+			logger.Warn("failed to create R2 client - video uploads will be disabled", zap.Error(err))
+		} else {
+			logger.Info("R2 client initialized")
+		}
+	} else {
+		logger.Warn("R2 not configured - video uploads will be disabled")
 	}
-	logger.Info("R2 client initialized")
 
 	// Create services
 	authService := service.NewAuthService(userRepo, cfg.JWT.Secret, cfg.JWT.Expiry, logger)
