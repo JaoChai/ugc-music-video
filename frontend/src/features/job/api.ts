@@ -1,6 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/api'
-import type { Job, JobsResponse, CreateJobRequest } from './types'
+import { api } from '@/lib/axios'
+import type { Job, CreateJobRequest } from './types'
+
+// API Response types (matching Go backend)
+interface ApiResponse<T> {
+  success: boolean
+  data?: T
+  error?: {
+    code: number
+    message: string
+  }
+  meta?: {
+    page: number
+    per_page: number
+    total: number
+    total_pages: number
+  }
+}
 
 // Query keys
 export const jobKeys = {
@@ -15,47 +31,53 @@ export const jobKeys = {
 async function fetchJobs(params: {
   page?: number
   perPage?: number
-  status?: string
-  search?: string
-}): Promise<JobsResponse> {
-  const searchParams = new URLSearchParams()
-  if (params.page) searchParams.set('page', params.page.toString())
-  if (params.perPage) searchParams.set('perPage', params.perPage.toString())
-  if (params.status) searchParams.set('filter', `status="${params.status}"`)
-  if (params.search) {
-    const existingFilter = searchParams.get('filter')
-    const searchFilter = `concept~"${params.search}"`
-    searchParams.set('filter', existingFilter ? `${existingFilter}&&${searchFilter}` : searchFilter)
+}): Promise<{ jobs: Job[]; meta: ApiResponse<Job[]>['meta'] }> {
+  const response = await api.get<ApiResponse<Job[]>>('/api/v1/jobs', {
+    params: { page: params.page || 1, per_page: params.perPage || 10 },
+  })
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error?.message || 'Failed to fetch jobs')
   }
 
-  const response = await api.get(`/api/collections/jobs/records?${searchParams.toString()}`)
-  return response.data
+  return {
+    jobs: response.data.data,
+    meta: response.data.meta,
+  }
 }
 
 async function fetchJob(id: string): Promise<Job> {
-  const response = await api.get(`/api/collections/jobs/records/${id}`)
-  return response.data
+  const response = await api.get<ApiResponse<Job>>(`/api/v1/jobs/${id}`)
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error?.message || 'Failed to fetch job')
+  }
+
+  return response.data.data
 }
 
 async function createJob(data: CreateJobRequest): Promise<Job> {
-  const response = await api.post('/api/collections/jobs/records', data)
-  return response.data
+  const response = await api.post<ApiResponse<Job>>('/api/v1/jobs', data)
+
+  if (!response.data.success || !response.data.data) {
+    throw new Error(response.data.error?.message || 'Failed to create job')
+  }
+
+  return response.data.data
 }
 
-async function cancelJob(id: string): Promise<Job> {
-  const response = await api.patch(`/api/collections/jobs/records/${id}`, {
-    status: 'failed',
-    error_message: 'Cancelled by user',
-  })
-  return response.data
+async function cancelJob(id: string): Promise<void> {
+  const response = await api.delete<ApiResponse<null>>(`/api/v1/jobs/${id}`)
+
+  if (!response.data.success) {
+    throw new Error(response.data.error?.message || 'Failed to cancel job')
+  }
 }
 
 // Hooks
 export function useJobs(params: {
   page?: number
   perPage?: number
-  status?: string
-  search?: string
 } = {}) {
   return useQuery({
     queryKey: jobKeys.list(params),
@@ -88,9 +110,9 @@ export function useCancelJob() {
 
   return useMutation({
     mutationFn: cancelJob,
-    onSuccess: (data) => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: jobKeys.lists() })
-      queryClient.setQueryData(jobKeys.detail(data.id), data)
+      queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
     },
   })
 }

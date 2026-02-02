@@ -140,11 +140,11 @@ export default function JobDetailPage() {
                 <div className="flex items-center gap-6 text-sm text-gray-500">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
-                    <span>Created: {formatDate(currentJob.created)}</span>
+                    <span>Created: {formatDate(currentJob.created_at)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="h-4 w-4" />
-                    <span>Updated: {formatDate(currentJob.updated)}</span>
+                    <span>Updated: {formatDate(currentJob.updated_at)}</span>
                   </div>
                 </div>
               </CardContent>
@@ -165,48 +165,66 @@ export default function JobDetailPage() {
               </Card>
             )}
 
-            {/* Song Details Section */}
-            {currentJob.song && (
+            {/* Song Prompt Section */}
+            {currentJob.song_prompt && (
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Music className="h-5 w-5 text-purple-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Song Details</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">Song Prompt</h2>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <dt className="text-sm text-gray-500">Title</dt>
-                      <dd className="text-gray-900 font-medium">{currentJob.song.title}</dd>
+                      <dd className="text-gray-900 font-medium">{currentJob.song_prompt.title}</dd>
                     </div>
                     <div>
                       <dt className="text-sm text-gray-500">Style</dt>
-                      <dd className="text-gray-900">{currentJob.song.style}</dd>
+                      <dd className="text-gray-900">{currentJob.song_prompt.style}</dd>
                     </div>
                   </div>
 
-                  {currentJob.song.lyrics && (
+                  {currentJob.song_prompt.prompt && (
                     <div>
-                      <dt className="text-sm text-gray-500 mb-1">Lyrics</dt>
+                      <dt className="text-sm text-gray-500 mb-1">Prompt</dt>
                       <dd className="text-gray-700 text-sm whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">
-                        {currentJob.song.lyrics}
+                        {currentJob.song_prompt.prompt}
                       </dd>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            )}
 
-                  {currentJob.song.audio_url && (
-                    <div>
-                      <dt className="text-sm text-gray-500 mb-2">Audio Preview</dt>
-                      <audio
-                        controls
-                        className="w-full"
-                        src={currentJob.song.audio_url}
-                      >
-                        Your browser does not support the audio element.
-                      </audio>
+            {/* Generated Songs Section */}
+            {currentJob.generated_songs && currentJob.generated_songs.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Music className="h-5 w-5 text-purple-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">Generated Songs</h2>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {currentJob.generated_songs.map((song) => (
+                    <div key={song.id} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900">{song.title}</span>
+                        {currentJob.selected_song_id === song.id && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      {song.audio_url && (
+                        <audio controls className="w-full" src={song.audio_url}>
+                          Your browser does not support the audio element.
+                        </audio>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </CardContent>
               </Card>
             )}
@@ -289,19 +307,19 @@ export default function JobDetailPage() {
                       <JobStatusBadge status={currentJob.status} />
                     </dd>
                   </div>
-                  {currentJob.model && (
+                  {currentJob.llm_model && (
                     <div>
                       <dt className="text-sm text-gray-500">Model</dt>
-                      <dd className="text-gray-900 font-mono text-sm">{currentJob.model}</dd>
+                      <dd className="text-gray-900 font-mono text-sm">{currentJob.llm_model}</dd>
                     </div>
                   )}
                   <div>
                     <dt className="text-sm text-gray-500">Created</dt>
-                    <dd className="text-gray-900 text-sm">{formatDate(currentJob.created)}</dd>
+                    <dd className="text-gray-900 text-sm">{formatDate(currentJob.created_at)}</dd>
                   </div>
                   <div>
                     <dt className="text-sm text-gray-500">Last Updated</dt>
-                    <dd className="text-gray-900 text-sm">{formatDate(currentJob.updated)}</dd>
+                    <dd className="text-gray-900 text-sm">{formatDate(currentJob.updated_at)}</dd>
                   </div>
                 </dl>
               </CardContent>

@@ -130,7 +130,7 @@ func main() {
 	}
 
 	// Setup Gin router
-	router := setupRouter(cfg, authService, jobService, userRepo, asynqClient, logger)
+	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, asynqClient, logger)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -208,6 +208,7 @@ func setupRouter(
 	cfg *config.Config,
 	authService service.AuthService,
 	jobService service.JobService,
+	jobRepo repository.JobRepository,
 	userRepo repository.UserRepository,
 	asynqClient *asynq.Client,
 	logger *zap.Logger,
@@ -254,21 +255,9 @@ func setupRouter(
 		jobHandler := handler.NewJobHandler(jobService, userRepo, asynqClient, logger)
 		jobHandler.RegisterRoutes(v1, authMiddleware)
 
-		// Webhook routes
-		webhooks := v1.Group("/webhooks")
-		{
-			// Suno webhook for music generation callbacks
-			webhooks.POST("/suno", func(c *gin.Context) {
-				// TODO: Implement Suno webhook handler
-				c.JSON(http.StatusOK, gin.H{"status": "received"})
-			})
-
-			// KIE webhook for image generation callbacks
-			webhooks.POST("/kie", func(c *gin.Context) {
-				// TODO: Implement KIE webhook handler
-				c.JSON(http.StatusOK, gin.H{"status": "received"})
-			})
-		}
+		// Webhook routes (no auth required - external services)
+		webhookHandler := handler.NewWebhookHandler(jobRepo, jobService, asynqClient, logger)
+		webhookHandler.RegisterRoutes(v1)
 	}
 
 	return router

@@ -1,49 +1,6 @@
 # Current Tasks
 
-## Critical
-
----
-
-### [ ] Consolidate duplicate job APIs
-
-**Priority:** Critical
-**Files:** `frontend/src/api/jobs.ts`, `frontend/src/features/job/api.ts`
-
-#### Description
-Two different job API implementations exist with different endpoint patterns:
-- `api/jobs.ts`: Uses `/api/jobs` (matches Go backend)
-- `features/job/api.ts`: Uses `/api/collections/jobs/records` (PocketBase style - WRONG)
-
-#### Solution
-1. Delete `frontend/src/api/jobs.ts`
-2. Update `features/job/api.ts` to use correct endpoints (`/api/jobs`)
-3. Update all imports to use `features/job/api.ts`
-
-#### Acceptance Criteria
-- [ ] Only one job API file exists
-- [ ] Endpoints match Go backend (`/api/jobs`)
-- [ ] All components use the correct API
-- [ ] `npm run build` passes
-
----
-
 ## High Priority
-
-### [ ] Implement webhook handlers
-
-**Priority:** High
-**Files:** `internal/handler/webhook_handler.go`
-
-#### Description
-Suno and NanoBanana send callbacks when generation completes, but handlers are not implemented.
-
-#### Acceptance Criteria
-- [ ] `POST /webhooks/suno/:job_id` updates job with generated songs
-- [ ] `POST /webhooks/nano/:job_id` updates job with image URL
-- [ ] Both enqueue next task in pipeline
-- [ ] Error handling for invalid payloads
-
----
 
 ### [ ] Add DownloadButton to JobDetailPage
 
@@ -109,6 +66,38 @@ Unhandled React errors crash the entire app.
 ---
 
 ## Completed
+
+### [x] Consolidate duplicate job APIs (2026-02-02)
+
+**Files changed:**
+- Deleted `frontend/src/api/jobs.ts`
+- Rewrote `frontend/src/features/job/api.ts` - correct endpoints `/api/v1/jobs`
+- Rewrote `frontend/src/features/dashboard/hooks/useJobs.ts` - correct endpoints
+- Updated `frontend/src/features/job/types.ts` - match backend JobResponse struct
+- Fixed `frontend/src/features/job/pages/JobDetailPage.tsx` - use new field names
+- Fixed `frontend/src/features/job/pages/JobListPage.tsx` - use new data structure
+- Fixed `frontend/src/features/dashboard/components/RecentJobsList.tsx`
+
+**Changes:**
+- Removed duplicate api/jobs.ts file
+- All API calls now use `/api/v1/jobs` endpoints
+- Frontend Job type now matches backend JobResponse
+- Fixed field names: `created` → `created_at`, `updated` → `updated_at`, `model` → `llm_model`
+- Fixed song structure: `song` → `song_prompt` and `generated_songs`
+- npm run build passes
+
+---
+
+### [x] Wire webhook handlers (2026-02-02)
+
+**Files changed:**
+- `cmd/ugc/main.go` - Used WebhookHandler.RegisterRoutes() instead of inline stubs
+
+**Changes:**
+- Webhook handlers were already implemented in `internal/handler/webhook_handler.go`
+- Just needed to be wired in main.go
+
+---
 
 ### [x] Wire worker handlers to real implementations (2026-02-02)
 

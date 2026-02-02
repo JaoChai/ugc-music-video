@@ -11,38 +11,52 @@ export type JobStatus =
   | 'completed'
   | 'failed'
 
-export interface SongDetails {
-  id: string
-  title: string
+// Matches Go backend SongPrompt struct
+export interface SongPrompt {
+  prompt: string
   style: string
-  lyrics?: string
-  audio_url?: string
+  title: string
+  model: string
+  instrumental: boolean
 }
 
+// Matches Go backend GeneratedSong struct
+export interface GeneratedSong {
+  id: string
+  audio_url: string
+  title: string
+  duration: number
+}
+
+// Matches Go backend ImagePrompt struct
+export interface ImagePrompt {
+  prompt: string
+  aspect_ratio: string
+  resolution: string
+}
+
+// Matches Go backend JobResponse struct
 export interface Job {
   id: string
-  concept: string
-  model?: string
+  user_id: string
   status: JobStatus
-  error_message?: string
-  song?: SongDetails
+  concept: string
+  llm_model: string
+  song_prompt?: SongPrompt
+  generated_songs?: GeneratedSong[]
+  selected_song_id?: string
+  image_prompt?: ImagePrompt
+  audio_url?: string
   image_url?: string
   video_url?: string
-  created: string
-  updated: string
+  error_message?: string
+  created_at: string
+  updated_at: string
 }
 
 export interface CreateJobRequest {
   concept: string
   model?: string
-}
-
-export interface JobsResponse {
-  page: number
-  perPage: number
-  totalItems: number
-  totalPages: number
-  items: Job[]
 }
 
 // Status progression order for timeline

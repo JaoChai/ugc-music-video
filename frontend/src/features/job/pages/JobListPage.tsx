@@ -30,8 +30,6 @@ export default function JobListPage() {
   const { data, isLoading, error } = useJobs({
     page,
     perPage: 10,
-    status: statusFilter || undefined,
-    search: searchQuery || undefined,
   })
 
   const cancelJob = useCancelJob()
@@ -146,7 +144,7 @@ export default function JobListPage() {
               <p className="text-red-600">Error loading jobs. Please try again.</p>
             </CardContent>
           </Card>
-        ) : !data?.items?.length ? (
+        ) : !data?.jobs?.length ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -189,7 +187,7 @@ export default function JobListPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {data.items.map((job) => (
+                    {data.jobs.map((job) => (
                       <tr
                         key={job.id}
                         className="hover:bg-gray-50 cursor-pointer"
@@ -209,7 +207,7 @@ export default function JobListPage() {
                           <JobStatusBadge status={job.status} />
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
-                          {formatDate(job.created)}
+                          {formatDate(job.created_at)}
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -244,11 +242,11 @@ export default function JobListPage() {
             </Card>
 
             {/* Pagination */}
-            {data.totalPages > 1 && (
+            {data.meta && data.meta.total_pages > 1 && (
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-sm text-gray-700">
-                  Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, data.totalItems)} of{' '}
-                  {data.totalItems} results
+                  Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, data.meta.total)} of{' '}
+                  {data.meta.total} results
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -262,8 +260,8 @@ export default function JobListPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
-                    disabled={page === data.totalPages}
+                    onClick={() => setPage((p) => Math.min(data.meta!.total_pages, p + 1))}
+                    disabled={page === data.meta.total_pages}
                   >
                     Next
                   </Button>

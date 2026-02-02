@@ -110,7 +110,7 @@ export function RecentJobsList({ jobs, isLoading }: RecentJobsListProps) {
               {truncateText(job.concept)}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {formatDate(job.created)}
+              {formatDate(job.created_at)}
             </p>
           </div>
           <div className="flex items-center gap-3">
