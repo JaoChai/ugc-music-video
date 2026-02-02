@@ -6,8 +6,17 @@ interface PrivateRouteProps {
 }
 
 export function PrivateRoute({ children }: PrivateRouteProps) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
   const location = useLocation()
+
+  // Wait for Zustand to hydrate from localStorage before making auth decisions
+  if (!_hasHydrated) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
+  }
 
   if (!isAuthenticated) {
     // Redirect to login, preserving the intended destination
