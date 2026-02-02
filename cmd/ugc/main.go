@@ -227,8 +227,8 @@ func setupRouter(
 	// CORS middleware
 	var corsConfig middleware.CORSConfig
 	if cfg.IsProduction() {
-		// Production: restrict to specific origins (configure via env)
-		corsConfig = middleware.ProductionCORSConfig([]string{})
+		// Production: use origins from CORS_ORIGINS env var
+		corsConfig = middleware.ProductionCORSConfig(cfg.CORS.Origins)
 	} else {
 		// Development: allow localhost origins
 		corsConfig = middleware.DefaultCORSConfig()

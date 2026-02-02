@@ -17,6 +17,12 @@ type Config struct {
 	KIE        KIEConfig
 	OpenRouter OpenRouterConfig
 	Webhook    WebhookConfig
+	CORS       CORSConfig
+}
+
+// CORSConfig holds CORS-related configuration.
+type CORSConfig struct {
+	Origins []string // Comma-separated list of allowed origins
 }
 
 // ServerConfig holds server-related configuration.
@@ -121,9 +127,28 @@ func Load() (*Config, error) {
 		Webhook: WebhookConfig{
 			BaseURL: viper.GetString("WEBHOOK_BASE_URL"),
 		},
+		CORS: CORSConfig{
+			Origins: parseCORSOrigins(viper.GetString("CORS_ORIGINS")),
+		},
 	}
 
 	return cfg, nil
+}
+
+// parseCORSOrigins parses comma-separated CORS origins string into a slice.
+func parseCORSOrigins(originsStr string) []string {
+	if originsStr == "" {
+		return []string{}
+	}
+	origins := strings.Split(originsStr, ",")
+	result := make([]string, 0, len(origins))
+	for _, origin := range origins {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // IsDevelopment returns true if the environment is development.
