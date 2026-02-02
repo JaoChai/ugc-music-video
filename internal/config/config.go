@@ -70,7 +70,11 @@ type OpenRouterConfig struct {
 
 // WebhookConfig holds webhook-related configuration.
 type WebhookConfig struct {
-	BaseURL string
+	BaseURL        string
+	Secret         string        // Secret token for webhook authentication
+	RateLimitRPS   int           // Rate limit requests per second
+	RateLimitBurst int           // Rate limit burst size
+	AllowedHosts   []string      // Allowed hosts for URL validation (SSRF prevention)
 }
 
 // CryptoConfig holds encryption-related configuration.
@@ -94,6 +98,9 @@ func Load() (*Config, error) {
 	viper.SetDefault("SERVER_PORT", "8080")
 	viper.SetDefault("SERVER_ENV", "development")
 	viper.SetDefault("JWT_EXPIRY", "24h")
+	viper.SetDefault("WEBHOOK_RATE_LIMIT_RPS", 10)
+	viper.SetDefault("WEBHOOK_RATE_LIMIT_BURST", 20)
+	viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", "cdn1.suno.ai,cdn2.suno.ai,cdn.kie.ai,storage.kie.ai")
 
 	// Parse JWT expiry duration
 	jwtExpiry, err := time.ParseDuration(viper.GetString("JWT_EXPIRY"))
@@ -131,7 +138,11 @@ func Load() (*Config, error) {
 			APIKey: viper.GetString("OPENROUTER_API_KEY"),
 		},
 		Webhook: WebhookConfig{
-			BaseURL: viper.GetString("WEBHOOK_BASE_URL"),
+			BaseURL:        viper.GetString("WEBHOOK_BASE_URL"),
+			Secret:         viper.GetString("WEBHOOK_SECRET"),
+			RateLimitRPS:   viper.GetInt("WEBHOOK_RATE_LIMIT_RPS"),
+			RateLimitBurst: viper.GetInt("WEBHOOK_RATE_LIMIT_BURST"),
+			AllowedHosts:   parseCommaSeparated(viper.GetString("WEBHOOK_ALLOWED_HOSTS")),
 		},
 		CORS: CORSConfig{
 			Origins: parseCORSOrigins(viper.GetString("CORS_ORIGINS")),
@@ -146,13 +157,18 @@ func Load() (*Config, error) {
 
 // parseCORSOrigins parses comma-separated CORS origins string into a slice.
 func parseCORSOrigins(originsStr string) []string {
-	if originsStr == "" {
+	return parseCommaSeparated(originsStr)
+}
+
+// parseCommaSeparated parses comma-separated string into a slice.
+func parseCommaSeparated(str string) []string {
+	if str == "" {
 		return []string{}
 	}
-	origins := strings.Split(originsStr, ",")
-	result := make([]string, 0, len(origins))
-	for _, origin := range origins {
-		trimmed := strings.TrimSpace(origin)
+	parts := strings.Split(str, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}

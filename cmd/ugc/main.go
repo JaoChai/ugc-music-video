@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/jaochai/ugc/internal/handler"
 	"github.com/jaochai/ugc/internal/middleware"
 	"github.com/jaochai/ugc/internal/repository"
+	"github.com/jaochai/ugc/internal/security"
 	"github.com/jaochai/ugc/internal/service"
 	"github.com/jaochai/ugc/internal/worker"
 )
@@ -115,6 +117,21 @@ func main() {
 	defer asynqClient.Close()
 	logger.Info("asynq client initialized")
 
+	// Create Redis client for rate limiting (optional - may be nil if Redis URL is empty)
+	var redisClient *redis.Client
+	if cfg.Redis.URL != "" {
+		opt, err := redis.ParseURL(cfg.Redis.URL)
+		if err != nil {
+			logger.Warn("failed to parse redis URL for rate limiting, rate limiting will be disabled",
+				zap.Error(err),
+			)
+		} else {
+			redisClient = redis.NewClient(opt)
+			defer redisClient.Close()
+			logger.Info("redis client initialized for rate limiting")
+		}
+	}
+
 	// Create worker dependencies
 	workerDeps := worker.Dependencies{
 		JobRepo:         jobRepo,
@@ -125,6 +142,7 @@ func main() {
 		AsynqClient:     asynqClient,
 		Logger:          logger,
 		WebhookBaseURL:  cfg.Webhook.BaseURL,
+		WebhookSecret:   cfg.Webhook.Secret,
 		KIEBaseURL:      cfg.KIE.BaseURL,
 	}
 
@@ -135,7 +153,7 @@ func main() {
 	}
 
 	// Setup Gin router
-	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, cryptoService, asynqClient, logger)
+	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, cryptoService, asynqClient, redisClient, logger)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -217,6 +235,7 @@ func setupRouter(
 	userRepo repository.UserRepository,
 	cryptoService service.CryptoService,
 	asynqClient *asynq.Client,
+	redisClient *redis.Client,
 	logger *zap.Logger,
 ) *gin.Engine {
 	// Set Gin mode based on environment
@@ -261,9 +280,29 @@ func setupRouter(
 		jobHandler := handler.NewJobHandler(jobService, userRepo, cryptoService, asynqClient, logger)
 		jobHandler.RegisterRoutes(v1, authMiddleware)
 
-		// Webhook routes (no auth required - external services)
-		webhookHandler := handler.NewWebhookHandler(jobRepo, jobService, asynqClient, logger)
-		webhookHandler.RegisterRoutes(v1)
+		// Webhook routes (with rate limiting and token-based auth for external services)
+		urlValidator := security.NewURLValidator(cfg.Webhook.AllowedHosts)
+		webhookHandler := handler.NewWebhookHandler(jobRepo, jobService, asynqClient, urlValidator, logger)
+
+		// Rate limiting middleware (optional - depends on Redis availability)
+		var rateLimitMiddleware gin.HandlerFunc
+		if redisClient != nil {
+			rateLimitMiddleware = middleware.RateLimitMiddleware(middleware.RateLimitConfig{
+				RedisClient: redisClient,
+				RPS:         cfg.Webhook.RateLimitRPS,
+				Burst:       cfg.Webhook.RateLimitBurst,
+				KeyPrefix:   "ugc",
+				Logger:      logger,
+			})
+		}
+
+		// Webhook authentication middleware
+		webhookAuthMiddleware := middleware.WebhookAuthMiddleware(middleware.WebhookAuthConfig{
+			Secret: cfg.Webhook.Secret,
+			Logger: logger,
+		})
+
+		webhookHandler.RegisterRoutes(v1, rateLimitMiddleware, webhookAuthMiddleware)
 	}
 
 	return router

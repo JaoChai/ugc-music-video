@@ -43,6 +43,7 @@ type Dependencies struct {
 	AsynqClient     *asynq.Client
 	Logger          *zap.Logger
 	WebhookBaseURL  string // Base URL for webhooks, empty to use polling
+	WebhookSecret   string // Secret token for webhook authentication
 	KIEBaseURL      string // Base URL for KIE API
 }
 
@@ -103,6 +104,7 @@ func NewWorker(redisURL string, deps Dependencies, logger *zap.Logger) (*Worker,
 		AsynqClient:     deps.AsynqClient,
 		Logger:          deps.Logger,
 		WebhookBaseURL:  deps.WebhookBaseURL,
+		WebhookSecret:   deps.WebhookSecret,
 		KIEBaseURL:      deps.KIEBaseURL,
 	}
 

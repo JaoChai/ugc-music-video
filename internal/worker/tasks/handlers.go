@@ -36,6 +36,7 @@ type Dependencies struct {
 	AsynqClient      *asynq.Client
 	Logger           *zap.Logger
 	WebhookBaseURL   string // Base URL for webhooks, empty to disable
+	WebhookSecret    string // Secret token for webhook authentication
 	KIEBaseURL       string // Base URL for KIE API
 }
 
@@ -230,8 +231,9 @@ func HandleGenerateMusic(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Add webhook URL if configured
-		if deps.WebhookBaseURL != "" {
-			req.CallBackUrl = fmt.Sprintf("%s/webhooks/suno/%s", deps.WebhookBaseURL, payload.JobID.String())
+		// Route: /api/v1/webhooks/:token/suno/:job_id (matches RegisterRoutes in webhook_handler.go)
+		if deps.WebhookBaseURL != "" && deps.WebhookSecret != "" {
+			req.CallBackUrl = fmt.Sprintf("%s/api/v1/webhooks/%s/suno/%s", deps.WebhookBaseURL, deps.WebhookSecret, payload.JobID.String())
 		}
 
 		// Call Suno API to start generation
@@ -540,8 +542,9 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Add webhook URL if configured
-		if deps.WebhookBaseURL != "" {
-			req.CallBackUrl = fmt.Sprintf("%s/webhooks/nano/%s", deps.WebhookBaseURL, payload.JobID.String())
+		// Route: /api/v1/webhooks/:token/nano/:job_id (matches RegisterRoutes in webhook_handler.go)
+		if deps.WebhookBaseURL != "" && deps.WebhookSecret != "" {
+			req.CallBackUrl = fmt.Sprintf("%s/api/v1/webhooks/%s/nano/%s", deps.WebhookBaseURL, deps.WebhookSecret, payload.JobID.String())
 		}
 
 		// Create image generation task

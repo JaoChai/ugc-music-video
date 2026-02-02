@@ -176,6 +176,86 @@ func (r *JobRepository) ListWithUser(ctx context.Context) ([]JobWithUser, error)
 
 ---
 
+### [2026-02-02] Zustand Persist Hydration Race Condition
+
+**Context:** Using Zustand with persist middleware and checking hydration state in PrivateRoute
+
+**Problem:** Spinner stuck after login because `useSyncExternalStore` didn't trigger re-render when hydration completed between `getSnapshot()` and `subscribe()` calls.
+
+**Root Cause:**
+```typescript
+// BAD - Race condition in useSyncExternalStore
+export function useHasHydrated(): boolean {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      // BUG: If hydrated, returns empty function without calling onStoreChange
+      if (useAuthStore.persist.hasHydrated()) {
+        return () => {}  // No re-render triggered!
+      }
+      return useAuthStore.persist.onFinishHydration(onStoreChange)
+    },
+    () => useAuthStore.persist.hasHydrated(),
+    () => false
+  )
+}
+```
+
+Timeline:
+1. `getSnapshot()` returns `false` (hydration not done)
+2. Component renders with spinner
+3. Hydration completes (between render and subscribe)
+4. `subscribe()` sees `hasHydrated() = true`, returns empty function
+5. No listener registered → No re-render → Spinner stuck forever
+
+**Solution:**
+```typescript
+// GOOD - useState + useEffect with race condition handling
+export function useHasHydrated(): boolean {
+  const [hasHydrated, setHasHydrated] = useState(
+    useAuthStore.persist.hasHydrated()
+  )
+
+  useEffect(() => {
+    // Skip subscription if already hydrated
+    if (hasHydrated) return
+
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      setHasHydrated(true)
+    })
+
+    // Handle race condition: hydration may have completed between
+    // useState initialization and this effect running
+    if (useAuthStore.persist.hasHydrated()) {
+      queueMicrotask(() => setHasHydrated(true))
+    }
+
+    return unsubscribe
+  }, [hasHydrated])
+
+  return hasHydrated
+}
+```
+
+**Why this works:**
+- `useState` captures initial value synchronously
+- `useEffect` subscribes to future changes
+- Double-check in effect catches race condition
+- `queueMicrotask` avoids synchronous setState in effect body (ESLint rule)
+- Early return when hydrated skips unnecessary subscription
+
+**Prevention:**
+- Avoid `useSyncExternalStore` for Zustand persist hydration state
+- Always double-check async state in useEffect after subscribing
+- Use `queueMicrotask` or `setTimeout` for deferred setState in effects
+- Test login flow with CPU throttling to catch race conditions
+
+**Related Files:**
+- `frontend/src/hooks/useHasHydrated.ts`
+- `frontend/src/components/PrivateRoute.tsx`
+- `frontend/src/stores/auth.store.ts`
+
+---
+
 ## Add New Bug Patterns Below
 
 _When you encounter a bug, document it here following the template above_
