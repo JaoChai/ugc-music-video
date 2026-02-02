@@ -3,16 +3,25 @@
 export interface User {
   id: string
   email: string
-  name: string
+  name: string | null
   avatar?: string
   openrouter_model?: string
-  created: string
-  updated: string
+  created_at: string
+  updated_at: string
 }
 
 export interface ApiResponse<T> {
-  data: T
-  message?: string
+  success: boolean
+  data?: T
+  error?: ApiError
+  meta?: PaginationMeta
+}
+
+export interface PaginationMeta {
+  page: number
+  per_page: number
+  total: number
+  total_pages: number
 }
 
 export interface PaginatedResponse<T> {
@@ -24,9 +33,9 @@ export interface PaginatedResponse<T> {
 }
 
 export interface ApiError {
+  code: number
   message: string
-  code?: string
-  data?: Record<string, unknown>
+  details?: Record<string, string>
 }
 
 export interface APIKeysStatus {

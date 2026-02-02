@@ -14,4 +14,4 @@ export type { LoginFormData, RegisterFormData } from './schemas/auth.schema'
 
 // API
 export { authApi } from './api/auth.api'
-export type { LoginRequest, RegisterRequest, AuthResponse } from './api/auth.api'
+export type { LoginRequest, RegisterRequest } from './api/auth.api'

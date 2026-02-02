@@ -25,7 +25,7 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onSuccess: (response) => {
-      storeLogin(response.record, response.token)
+      storeLogin(response.user, response.token)
       queryClient.invalidateQueries({ queryKey: ['user'] })
       // Redirect to intended destination or home
       navigate(from, { replace: true })
