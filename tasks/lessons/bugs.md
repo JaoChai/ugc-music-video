@@ -176,83 +176,88 @@ func (r *JobRepository) ListWithUser(ctx context.Context) ([]JobWithUser, error)
 
 ---
 
-### [2026-02-02] Zustand Persist Hydration Race Condition
+### [2026-02-02] Zustand Persist Hydration - Spinner Stuck After Login/Refresh
 
-**Context:** Using Zustand with persist middleware and checking hydration state in PrivateRoute
+**Context:** Using Zustand with persist middleware and checking auth state in PrivateRoute
 
-**Problem:** Spinner stuck after login because `useSyncExternalStore` didn't trigger re-render when hydration completed between `getSnapshot()` and `subscribe()` calls.
+**Problem:** Spinner stuck indefinitely after login or page refresh because hydration state tracking was overly complex.
 
 **Root Cause:**
+The original approach tried to track hydration state separately using hooks like `useHasHydrated()` with `useSyncExternalStore` or `useState/useEffect`. These approaches had race conditions:
+
+1. `isAuthenticated` was NOT persisted to localStorage (only `user` and `token`)
+2. After page refresh, `isAuthenticated` defaulted to `false`
+3. `onRehydrateStorage` callback was supposed to set `isAuthenticated: true` but didn't fire reliably
+4. Various hydration tracking hooks had race conditions between React lifecycle and Zustand persist
+
 ```typescript
-// BAD - Race condition in useSyncExternalStore
-export function useHasHydrated(): boolean {
-  return useSyncExternalStore(
-    (onStoreChange) => {
-      // BUG: If hydrated, returns empty function without calling onStoreChange
-      if (useAuthStore.persist.hasHydrated()) {
-        return () => {}  // No re-render triggered!
-      }
-      return useAuthStore.persist.onFinishHydration(onStoreChange)
-    },
-    () => useAuthStore.persist.hasHydrated(),
-    () => false
-  )
-}
+// BAD - Complex hydration tracking that doesn't work reliably
+partialize: (state) => ({ user: state.user, token: state.token }), // Missing isAuthenticated!
+
+onRehydrateStorage: () => (state) => {
+  // This callback doesn't fire reliably in all scenarios
+  useAuthStore.setState({ isAuthenticated: !!state?.token })
+},
 ```
 
-Timeline:
-1. `getSnapshot()` returns `false` (hydration not done)
-2. Component renders with spinner
-3. Hydration completes (between render and subscribe)
-4. `subscribe()` sees `hasHydrated() = true`, returns empty function
-5. No listener registered → No re-render → Spinner stuck forever
-
 **Solution:**
+**Simply persist `isAuthenticated` directly!** No need for hydration tracking at all.
+
 ```typescript
-// GOOD - useState + useEffect with race condition handling
-export function useHasHydrated(): boolean {
-  const [hasHydrated, setHasHydrated] = useState(
-    useAuthStore.persist.hasHydrated()
-  )
-
-  useEffect(() => {
-    // Skip subscription if already hydrated
-    if (hasHydrated) return
-
-    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
-      setHasHydrated(true)
-    })
-
-    // Handle race condition: hydration may have completed between
-    // useState initialization and this effect running
-    if (useAuthStore.persist.hasHydrated()) {
-      queueMicrotask(() => setHasHydrated(true))
+// GOOD - Persist isAuthenticated directly
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      login: (user, token) => {
+        localStorage.setItem('auth_token', token)
+        set({ user, token, isAuthenticated: true })
+      },
+      logout: () => {
+        localStorage.removeItem('auth_token')
+        set({ user: null, token: null, isAuthenticated: false })
+      },
+    }),
+    {
+      name: 'auth-storage',
+      // Key fix: persist isAuthenticated so it's available immediately after hydration
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated  // <-- This is the fix!
+      }),
     }
+  )
+)
 
-    return unsubscribe
-  }, [hasHydrated])
+// PrivateRoute becomes simple - no hydration check needed
+export function PrivateRoute({ children }: PrivateRouteProps) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
-  return hasHydrated
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  return <>{children}</>
 }
 ```
 
 **Why this works:**
-- `useState` captures initial value synchronously
-- `useEffect` subscribes to future changes
-- Double-check in effect catches race condition
-- `queueMicrotask` avoids synchronous setState in effect body (ESLint rule)
-- Early return when hydrated skips unnecessary subscription
+- `isAuthenticated` is saved to localStorage on login
+- After page refresh, Zustand hydrates `isAuthenticated` directly from localStorage
+- No race conditions because value is immediately available
+- No need for `onRehydrateStorage`, `_hasHydrated`, or `useHasHydrated` hooks
 
 **Prevention:**
-- Avoid `useSyncExternalStore` for Zustand persist hydration state
-- Always double-check async state in useEffect after subscribing
-- Use `queueMicrotask` or `setTimeout` for deferred setState in effects
-- Test login flow with CPU throttling to catch race conditions
+- When using Zustand persist, include ALL auth-related state in `partialize`
+- Avoid complex hydration tracking - persist the values you need directly
+- Don't rely on `onRehydrateStorage` callback for critical state updates
+- Keep auth logic simple: if it needs to survive page refresh, persist it
 
 **Related Files:**
-- `frontend/src/hooks/useHasHydrated.ts`
-- `frontend/src/components/PrivateRoute.tsx`
 - `frontend/src/stores/auth.store.ts`
+- `frontend/src/components/PrivateRoute.tsx`
 
 ---
 
