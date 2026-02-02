@@ -11,18 +11,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const songSelectorSystemPrompt = `You are a music curator AI. Select the best song from the candidates based on the original concept.
-
-Consider:
-1. Title match with concept theme
-2. Duration (2-4 minutes is ideal for music videos)
-3. Professional sounding titles indicate better quality
-
-Output JSON:
-{
-  "selectedSongId": "id of chosen song",
-  "reasoning": "brief explanation why this song was selected"
-}`
 
 // SongCandidate represents a song candidate from Suno.
 type SongCandidate struct {
@@ -47,13 +35,31 @@ type SongSelectorOutput struct {
 // SongSelectorAgent selects the best song from candidates based on the original concept.
 type SongSelectorAgent struct {
 	*BaseAgent
+	customPrompt *string
 }
 
 // NewSongSelectorAgent creates a new SongSelectorAgent.
 func NewSongSelectorAgent(llmClient *openrouter.Client, model string, logger *zap.Logger) *SongSelectorAgent {
 	return &SongSelectorAgent{
-		BaseAgent: NewBaseAgent(llmClient, model, logger),
+		BaseAgent:    NewBaseAgent(llmClient, model, logger),
+		customPrompt: nil,
 	}
+}
+
+// NewSongSelectorAgentWithPrompt creates a new SongSelectorAgent with a custom system prompt.
+func NewSongSelectorAgentWithPrompt(llmClient *openrouter.Client, model string, logger *zap.Logger, customPrompt *string) *SongSelectorAgent {
+	return &SongSelectorAgent{
+		BaseAgent:    NewBaseAgent(llmClient, model, logger),
+		customPrompt: customPrompt,
+	}
+}
+
+// getSystemPrompt returns the system prompt for the song selector agent.
+func (a *SongSelectorAgent) getSystemPrompt() string {
+	if a.customPrompt != nil && *a.customPrompt != "" {
+		return *a.customPrompt
+	}
+	return DefaultSongSelectorPrompt
 }
 
 // Select chooses the best song from the candidates based on the original concept.
@@ -83,7 +89,7 @@ func (a *SongSelectorAgent) Select(ctx context.Context, input SongSelectorInput)
 	)
 
 	// Call LLM
-	response, err := a.LLMClient().ChatWithModel(ctx, a.Model(), songSelectorSystemPrompt, userPrompt)
+	response, err := a.LLMClient().ChatWithModel(ctx, a.Model(), a.getSystemPrompt(), userPrompt)
 	if err != nil {
 		a.Logger().Error("failed to call LLM for song selection",
 			zap.Error(err),

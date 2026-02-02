@@ -40,60 +40,34 @@ func (o *SongConceptOutput) ToSongPrompt() *models.SongPrompt {
 // SongConceptAgent analyzes song concepts and generates prompts for Suno AI.
 type SongConceptAgent struct {
 	*BaseAgent
+	customPrompt *string
 }
 
 // NewSongConceptAgent creates a new SongConceptAgent instance.
 func NewSongConceptAgent(llmClient *openrouter.Client, model string, logger *zap.Logger) *SongConceptAgent {
 	return &SongConceptAgent{
-		BaseAgent: NewBaseAgent(llmClient, model, logger),
+		BaseAgent:    NewBaseAgent(llmClient, model, logger),
+		customPrompt: nil,
+	}
+}
+
+// NewSongConceptAgentWithPrompt creates a new SongConceptAgent with a custom system prompt.
+func NewSongConceptAgentWithPrompt(llmClient *openrouter.Client, model string, logger *zap.Logger, customPrompt *string) *SongConceptAgent {
+	return &SongConceptAgent{
+		BaseAgent:    NewBaseAgent(llmClient, model, logger),
+		customPrompt: customPrompt,
 	}
 }
 
 // systemPrompt returns the system prompt for the song concept agent.
+// If a custom prompt is set, it will be used instead of the default.
 func (a *SongConceptAgent) systemPrompt(language string) string {
-	return fmt.Sprintf(`You are a professional music producer AI specializing in creating optimized prompts for Suno AI music generation.
-
-Your task is to analyze the user's song concept and generate a complete prompt that will produce high-quality music.
-
-Output ONLY valid JSON in this exact format (no markdown, no code blocks, just raw JSON):
-{
-  "prompt": "lyrics or description for Suno (max 3000 chars)",
-  "style": "music genre and style",
-  "title": "catchy song title",
-  "model": "V4 or V4_5 or V5",
-  "instrumental": false
-}
-
-Guidelines for each field:
-
-**prompt** (max 3000 characters):
-- Write complete song lyrics with verse, chorus, and bridge structure
-- Use [Verse], [Chorus], [Bridge], [Outro] tags to structure the song
-- Make lyrics emotional, memorable, and catchy
-- For %s concepts, write lyrics in %s
-- Include vivid imagery and relatable themes
-- If the concept is abstract or instrumental, write a descriptive prompt instead
-
-**style** (be specific and detailed):
-- Combine genre with mood and instrumentation
-- Examples: "Thai pop ballad with piano and strings", "Lo-fi hip hop with jazzy chords", "Epic orchestral cinematic", "Indie folk with acoustic guitar"
-- Match the style to the emotional tone of the concept
-
-**title**:
-- Create a memorable, catchy title that captures the essence of the song
-- Keep it concise (2-5 words typically)
-- Can be in %s or English depending on the concept
-
-**model**:
-- Use "V4" for standard songs with clear vocals and common genres
-- Use "V4_5" for complex arrangements, unique styles, or when higher quality is needed
-- Use "V5" for experimental or cutting-edge generation (latest model)
-
-**instrumental**:
-- Set to true ONLY if the concept explicitly asks for no vocals or an instrumental piece
-- Default to false for most concepts
-
-Remember: Output ONLY the JSON object, no explanations or additional text.`, language, language, language)
+	if a.customPrompt != nil && *a.customPrompt != "" {
+		// Use custom prompt - replace {{LANGUAGE}} placeholder if present
+		return fmt.Sprintf(*a.customPrompt, language, language, language)
+	}
+	// Use default prompt template
+	return fmt.Sprintf(DefaultSongConceptPromptTemplate, language, language, language)
 }
 
 // Analyze processes a song concept and generates an optimized Suno prompt.

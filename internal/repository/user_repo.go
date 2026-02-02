@@ -25,6 +25,10 @@ type UserRepository interface {
 	UpdateAPIKeys(ctx context.Context, userID uuid.UUID, openRouterKey, kieKey *string) error
 	GetAPIKeys(ctx context.Context, userID uuid.UUID) (openRouterKey, kieKey *string, err error)
 	DeleteAPIKeys(ctx context.Context, userID uuid.UUID) error
+	// Agent prompt methods
+	GetPrompts(ctx context.Context, userID uuid.UUID) (songConcept, songSelector, imageConcept *string, err error)
+	UpdatePrompt(ctx context.Context, userID uuid.UUID, agentType string, prompt *string) error
+	ResetPrompt(ctx context.Context, userID uuid.UUID, agentType string) error
 }
 
 // userRepository implements UserRepository using pgx.
@@ -238,4 +242,54 @@ func (r *userRepository) DeleteAPIKeys(ctx context.Context, userID uuid.UUID) er
 	}
 
 	return nil
+}
+
+// GetPrompts retrieves the custom agent prompts for a user.
+func (r *userRepository) GetPrompts(ctx context.Context, userID uuid.UUID) (songConcept, songSelector, imageConcept *string, err error) {
+	query := `
+		SELECT song_concept_prompt, song_selector_prompt, image_concept_prompt
+		FROM users
+		WHERE id = $1
+	`
+
+	err = r.db.Pool().QueryRow(ctx, query, userID).Scan(&songConcept, &songSelector, &imageConcept)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, nil, ErrUserNotFound
+		}
+		return nil, nil, nil, fmt.Errorf("failed to get prompts: %w", err)
+	}
+
+	return songConcept, songSelector, imageConcept, nil
+}
+
+// UpdatePrompt updates a specific agent prompt for a user.
+func (r *userRepository) UpdatePrompt(ctx context.Context, userID uuid.UUID, agentType string, prompt *string) error {
+	var query string
+	switch agentType {
+	case "song_concept":
+		query = `UPDATE users SET song_concept_prompt = $2, updated_at = NOW() WHERE id = $1`
+	case "song_selector":
+		query = `UPDATE users SET song_selector_prompt = $2, updated_at = NOW() WHERE id = $1`
+	case "image_concept":
+		query = `UPDATE users SET image_concept_prompt = $2, updated_at = NOW() WHERE id = $1`
+	default:
+		return fmt.Errorf("invalid agent type: %s", agentType)
+	}
+
+	result, err := r.db.Pool().Exec(ctx, query, userID, prompt)
+	if err != nil {
+		return fmt.Errorf("failed to update prompt: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// ResetPrompt resets a specific agent prompt to default (NULL) for a user.
+func (r *userRepository) ResetPrompt(ctx context.Context, userID uuid.UUID, agentType string) error {
+	return r.UpdatePrompt(ctx, userID, agentType, nil)
 }

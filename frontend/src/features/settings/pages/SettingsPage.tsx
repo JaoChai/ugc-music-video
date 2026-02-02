@@ -7,6 +7,7 @@ import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout
 import { useAuthStore } from '@/stores/auth.store'
 import { useUpdateProfileMutation } from '../hooks/useSettings'
 import { APIKeysSection } from '../components/APIKeysSection'
+import { AgentPromptsSection } from '../components/AgentPromptsSection'
 import type { UpdateProfileInput } from '../api/settings.api'
 
 interface SettingsFormData {
@@ -168,6 +169,11 @@ export default function SettingsPage() {
         {/* API Keys Section (separate form) */}
         <div className="mt-6">
           <APIKeysSection />
+        </div>
+
+        {/* Agent Prompts Section */}
+        <div className="mt-6">
+          <AgentPromptsSection />
         </div>
       </div>
     </DashboardLayout>

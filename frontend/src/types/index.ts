@@ -47,3 +47,28 @@ export interface UpdateAPIKeysInput {
   openrouter_api_key?: string
   kie_api_key?: string
 }
+
+// Agent Prompts Types
+export type AgentType = 'song_concept' | 'song_selector' | 'image_concept'
+
+export interface AgentPrompts {
+  song_concept_prompt: string | null
+  song_selector_prompt: string | null
+  image_concept_prompt: string | null
+}
+
+export interface AgentDefaultPrompts {
+  song_concept: string
+  song_selector: string
+  image_concept: string
+}
+
+export interface AgentPromptsResponse {
+  prompts: AgentPrompts
+  defaults: AgentDefaultPrompts
+}
+
+export interface UpdateAgentPromptInput {
+  agent_type: AgentType
+  prompt: string | null
+}

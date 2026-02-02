@@ -13,9 +13,12 @@ type User struct {
 	PasswordHash     string    `json:"-" gorm:"not null"`
 	Name             *string   `json:"name"`
 	OpenRouterModel  string    `json:"openrouter_model" gorm:"default:''"`
-	OpenRouterAPIKey *string   `json:"-"` // Encrypted, never expose in JSON
-	KIEAPIKey        *string   `json:"-"` // Encrypted, never expose in JSON
-	CreatedAt        time.Time `json:"created_at"`
+	OpenRouterAPIKey   *string   `json:"-"` // Encrypted, never expose in JSON
+	KIEAPIKey          *string   `json:"-"` // Encrypted, never expose in JSON
+	SongConceptPrompt  *string   `json:"-" gorm:"column:song_concept_prompt"`  // Custom system prompt
+	SongSelectorPrompt *string   `json:"-" gorm:"column:song_selector_prompt"` // Custom system prompt
+	ImageConceptPrompt *string   `json:"-" gorm:"column:image_concept_prompt"` // Custom system prompt
+	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
@@ -75,4 +78,30 @@ func (u *User) ToResponse() UserResponse {
 // TableName specifies the table name for GORM
 func (User) TableName() string {
 	return "users"
+}
+
+// AgentPromptsResponse represents the user's custom prompts and defaults
+type AgentPromptsResponse struct {
+	Prompts  AgentPrompts        `json:"prompts"`
+	Defaults AgentDefaultPrompts `json:"defaults"`
+}
+
+// AgentPrompts contains the user's custom prompts (nullable)
+type AgentPrompts struct {
+	SongConceptPrompt  *string `json:"song_concept_prompt"`
+	SongSelectorPrompt *string `json:"song_selector_prompt"`
+	ImageConceptPrompt *string `json:"image_concept_prompt"`
+}
+
+// AgentDefaultPrompts contains the default system prompts
+type AgentDefaultPrompts struct {
+	SongConcept  string `json:"song_concept"`
+	SongSelector string `json:"song_selector"`
+	ImageConcept string `json:"image_concept"`
+}
+
+// UpdateAgentPromptInput represents the input for updating a single agent prompt
+type UpdateAgentPromptInput struct {
+	AgentType string  `json:"agent_type" validate:"required,oneof=song_concept song_selector image_concept"`
+	Prompt    *string `json:"prompt"` // nil = reset to default
 }

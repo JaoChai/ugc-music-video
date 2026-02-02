@@ -10,33 +10,11 @@ import (
 	"go.uber.org/zap"
 )
 
-const imageConceptSystemPrompt = `You are a visual artist AI. Create an image prompt for a music video cover/background image.
-
-The image should:
-1. Capture the mood and emotion of the song
-2. Be visually striking and suitable as a static background for a music video
-3. Match the music genre aesthetic
-4. Be appropriate for all audiences
-
-Output JSON:
-{
-  "prompt": "detailed image description for AI generation (be specific about style, colors, composition, mood)",
-  "aspectRatio": "16:9",
-  "resolution": "1K"
-}
-
-Prompt guidelines:
-- Start with main subject/scene
-- Include art style (photorealistic, anime, abstract, etc.)
-- Describe lighting and color palette
-- Mention composition and mood
-- Keep it under 500 characters
-- Always use aspectRatio "16:9" for music videos
-- Use "1K" resolution for faster generation, "2K" for higher quality`
 
 // ImageConceptAgent generates image prompts based on song concepts.
 type ImageConceptAgent struct {
 	*BaseAgent
+	customPrompt *string
 }
 
 // ImageConceptInput contains the input data for image concept generation.
@@ -58,8 +36,25 @@ type ImageConceptOutput struct {
 // NewImageConceptAgent creates a new ImageConceptAgent.
 func NewImageConceptAgent(llmClient *openrouter.Client, model string, logger *zap.Logger) *ImageConceptAgent {
 	return &ImageConceptAgent{
-		BaseAgent: NewBaseAgent(llmClient, model, logger),
+		BaseAgent:    NewBaseAgent(llmClient, model, logger),
+		customPrompt: nil,
 	}
+}
+
+// NewImageConceptAgentWithPrompt creates a new ImageConceptAgent with a custom system prompt.
+func NewImageConceptAgentWithPrompt(llmClient *openrouter.Client, model string, logger *zap.Logger, customPrompt *string) *ImageConceptAgent {
+	return &ImageConceptAgent{
+		BaseAgent:    NewBaseAgent(llmClient, model, logger),
+		customPrompt: customPrompt,
+	}
+}
+
+// getSystemPrompt returns the system prompt for the image concept agent.
+func (a *ImageConceptAgent) getSystemPrompt() string {
+	if a.customPrompt != nil && *a.customPrompt != "" {
+		return *a.customPrompt
+	}
+	return DefaultImageConceptPrompt
 }
 
 // Generate creates an image prompt based on the song concept and info.
@@ -72,7 +67,7 @@ func (a *ImageConceptAgent) Generate(ctx context.Context, input ImageConceptInpu
 	userPrompt := a.buildUserPrompt(input)
 
 	var output ImageConceptOutput
-	if err := a.ChatJSON(ctx, imageConceptSystemPrompt, userPrompt, &output); err != nil {
+	if err := a.ChatJSON(ctx, a.getSystemPrompt(), userPrompt, &output); err != nil {
 		a.Logger().Error("failed to generate image concept",
 			zap.Error(err),
 			zap.String("song_title", input.SongTitle),

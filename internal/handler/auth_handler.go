@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/jaochai/ugc/internal/agents"
 	"github.com/jaochai/ugc/internal/middleware"
 	"github.com/jaochai/ugc/internal/models"
 	"github.com/jaochai/ugc/internal/repository"
@@ -83,6 +84,10 @@ func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup) {
 			protected.DELETE("/api-keys", h.DeleteAPIKeys)
 			protected.POST("/test-openrouter", h.TestOpenRouterConnection)
 			protected.POST("/test-kie", h.TestKIEConnection)
+			// Agent prompts routes
+			protected.GET("/prompts", h.GetAgentPrompts)
+			protected.PUT("/prompts", h.UpdateAgentPrompt)
+			protected.DELETE("/prompts/:agent_type", h.ResetAgentPrompt)
 		}
 	}
 }
@@ -740,4 +745,174 @@ func testKIEAPI(ctx context.Context, apiKey string, logger *zap.Logger) (bool, s
 			zap.String("body", string(body)))
 		return false, fmt.Sprintf("API error (status %d). Please try again later.", resp.StatusCode)
 	}
+}
+
+// maxPromptLength is the maximum allowed length for custom prompts
+const maxPromptLength = 10000
+
+// GetAgentPrompts returns the user's custom prompts and defaults
+// @Summary Get agent prompts
+// @Description Returns the user's custom AI agent prompts and default prompts for reference
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=models.AgentPromptsResponse}
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/prompts [get]
+func (h *AuthHandler) GetAgentPrompts(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	songConcept, songSelector, imageConcept, err := h.userRepo.GetPrompts(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get prompts", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, models.AgentPromptsResponse{
+		Prompts: models.AgentPrompts{
+			SongConceptPrompt:  songConcept,
+			SongSelectorPrompt: songSelector,
+			ImageConceptPrompt: imageConcept,
+		},
+		Defaults: models.AgentDefaultPrompts{
+			SongConcept:  agents.DefaultSongConceptPromptTemplate,
+			SongSelector: agents.DefaultSongSelectorPrompt,
+			ImageConcept: agents.DefaultImageConceptPrompt,
+		},
+	})
+}
+
+// UpdateAgentPrompt updates a specific agent's custom prompt
+// @Summary Update agent prompt
+// @Description Updates a specific AI agent's custom system prompt
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param input body models.UpdateAgentPromptInput true "Prompt data to update"
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=models.AgentPrompts}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/prompts [put]
+func (h *AuthHandler) UpdateAgentPrompt(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	var input models.UpdateAgentPromptInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	// Validate agent type
+	validAgentTypes := map[string]bool{
+		"song_concept":  true,
+		"song_selector": true,
+		"image_concept": true,
+	}
+	if !validAgentTypes[input.AgentType] {
+		response.BadRequest(c, "invalid agent type. Must be: song_concept, song_selector, or image_concept")
+		return
+	}
+
+	// Validate prompt length
+	if input.Prompt != nil && len(*input.Prompt) > maxPromptLength {
+		response.BadRequest(c, fmt.Sprintf("prompt must be %d characters or less", maxPromptLength))
+		return
+	}
+
+	// Update the prompt
+	if err := h.userRepo.UpdatePrompt(c.Request.Context(), userID, input.AgentType, input.Prompt); err != nil {
+		h.logger.Error("failed to update prompt", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("agent prompt updated",
+		zap.String("user_id", userID.String()),
+		zap.String("agent_type", input.AgentType),
+	)
+
+	// Return updated prompts
+	songConcept, songSelector, imageConcept, err := h.userRepo.GetPrompts(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get prompts after update", zap.Error(err))
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, models.AgentPrompts{
+		SongConceptPrompt:  songConcept,
+		SongSelectorPrompt: songSelector,
+		ImageConceptPrompt: imageConcept,
+	})
+}
+
+// ResetAgentPrompt resets a specific agent's prompt to default
+// @Summary Reset agent prompt
+// @Description Resets a specific AI agent's system prompt to the default value
+// @Tags auth
+// @Produce json
+// @Param agent_type path string true "Agent type (song_concept, song_selector, or image_concept)"
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=models.AgentPrompts}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/prompts/{agent_type} [delete]
+func (h *AuthHandler) ResetAgentPrompt(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	agentType := c.Param("agent_type")
+
+	// Validate agent type
+	validAgentTypes := map[string]bool{
+		"song_concept":  true,
+		"song_selector": true,
+		"image_concept": true,
+	}
+	if !validAgentTypes[agentType] {
+		response.BadRequest(c, "invalid agent type. Must be: song_concept, song_selector, or image_concept")
+		return
+	}
+
+	// Reset the prompt (set to NULL)
+	if err := h.userRepo.ResetPrompt(c.Request.Context(), userID, agentType); err != nil {
+		h.logger.Error("failed to reset prompt", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("agent prompt reset to default",
+		zap.String("user_id", userID.String()),
+		zap.String("agent_type", agentType),
+	)
+
+	// Return updated prompts
+	songConcept, songSelector, imageConcept, err := h.userRepo.GetPrompts(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get prompts after reset", zap.Error(err))
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, models.AgentPrompts{
+		SongConceptPrompt:  songConcept,
+		SongSelectorPrompt: songSelector,
+		ImageConceptPrompt: imageConcept,
+	})
 }

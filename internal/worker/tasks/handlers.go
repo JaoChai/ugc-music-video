@@ -126,9 +126,12 @@ func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc {
 			llmModel = DefaultLLMModel
 		}
 
+		// Get user's custom prompts
+		songConceptPrompt, _, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+
 		// Create per-user OpenRouter client and SongConceptAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
-		agent := agents.NewSongConceptAgent(openRouterClient, llmModel, logger)
+		agent := agents.NewSongConceptAgentWithPrompt(openRouterClient, llmModel, logger, songConceptPrompt)
 
 		// Analyze concept
 		input := agents.SongConceptInput{
@@ -352,9 +355,12 @@ func HandleSelectSong(deps *Dependencies) asynq.HandlerFunc {
 			llmModel = DefaultLLMModel
 		}
 
+		// Get user's custom prompts
+		_, songSelectorPrompt, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+
 		// Create per-user OpenRouter client and SongSelectorAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
-		agent := agents.NewSongSelectorAgent(openRouterClient, llmModel, logger)
+		agent := agents.NewSongSelectorAgentWithPrompt(openRouterClient, llmModel, logger, songSelectorPrompt)
 
 		// Build song candidates
 		candidates := make([]agents.SongCandidate, len(job.GeneratedSongs))
@@ -477,9 +483,12 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 			llmModel = DefaultLLMModel
 		}
 
+		// Get user's custom prompts
+		_, _, imageConceptPrompt, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+
 		// Create per-user OpenRouter client and ImageConceptAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
-		agent := agents.NewImageConceptAgent(openRouterClient, llmModel, logger)
+		agent := agents.NewImageConceptAgentWithPrompt(openRouterClient, llmModel, logger, imageConceptPrompt)
 
 		// Build input
 		var songTitle, songStyle, lyrics string
