@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
 const (
 	DefaultBaseURL     = "https://api.kie.ai"
-	ModelNanoBananaPro = "nano-banana-pro"
+	ModelNanoBananaPro = "google/nano-banana" // Updated to match KIE docs
 
 	// Aspect ratios
 	AspectRatio16x9 = "16:9"
@@ -33,6 +34,14 @@ const (
 	// Polling configuration
 	DefaultPollInterval = 3 * time.Second
 	DefaultTimeout      = 5 * time.Minute
+
+	// Market API task states (per KIE docs)
+	// https://docs.kie.ai/market/common/get-task-detail#task-states
+	StateWaiting    = "waiting"
+	StateQueuing    = "queuing"
+	StateGenerating = "generating"
+	StateSuccess    = "success"
+	StateFail       = "fail"
 )
 
 // NanoBananaClient is the client for KIE NanoBanana Pro API
@@ -66,14 +75,27 @@ type CreateTaskResponse struct {
 }
 
 // TaskStatusResponse represents the response from getting task status
+// https://docs.kie.ai/market/common/get-task-detail#response-format
 type TaskStatusResponse struct {
-	Code int `json:"code"`
-	Data struct {
-		Status string `json:"status"`
-		Output struct {
-			ImageUrl string `json:"imageUrl"`
-		} `json:"output"`
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    struct {
+		TaskId       string `json:"taskId"`
+		Model        string `json:"model"`
+		State        string `json:"state"` // waiting, queuing, generating, success, fail
+		Param        string `json:"param"`
+		ResultJson   string `json:"resultJson"` // JSON string containing resultUrls
+		FailCode     string `json:"failCode"`
+		FailMsg      string `json:"failMsg"`
+		CompleteTime int64  `json:"completeTime"`
+		CreateTime   int64  `json:"createTime"`
+		UpdateTime   int64  `json:"updateTime"`
 	} `json:"data"`
+}
+
+// ResultUrls represents the parsed resultJson structure
+type ResultUrls struct {
+	ResultUrls []string `json:"resultUrls"`
 }
 
 // APIError represents an error response from the API
@@ -152,8 +174,11 @@ func (c *NanoBananaClient) CreateTask(ctx context.Context, req CreateTaskRequest
 }
 
 // GetTask retrieves the status of a task
+// https://docs.kie.ai/market/common/get-task-detail
 func (c *NanoBananaClient) GetTask(ctx context.Context, taskId string) (*TaskStatusResponse, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/jobs/"+taskId, nil)
+	// Use correct endpoint: /api/v1/jobs/recordInfo?taskId={taskId}
+	endpoint := fmt.Sprintf("%s/api/v1/jobs/recordInfo?taskId=%s", c.baseURL, url.QueryEscape(taskId))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -183,10 +208,15 @@ func (c *NanoBananaClient) GetTask(ctx context.Context, taskId string) (*TaskSta
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
+	if statusResp.Code != 200 {
+		return nil, fmt.Errorf("API returned error code %d: %s", statusResp.Code, statusResp.Message)
+	}
+
 	return &statusResp, nil
 }
 
 // WaitForCompletion polls the task status until it's completed or the timeout is reached
+// https://docs.kie.ai/market/common/get-task-detail#task-states
 func (c *NanoBananaClient) WaitForCompletion(ctx context.Context, taskId string, timeout time.Duration) (*TaskStatusResponse, error) {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -208,16 +238,17 @@ func (c *NanoBananaClient) WaitForCompletion(ctx context.Context, taskId string,
 				return nil, fmt.Errorf("failed to get task status: %w", err)
 			}
 
-			switch status.Data.Status {
-			case StatusCompleted:
+			switch status.Data.State {
+			case StateSuccess:
 				return status, nil
-			case StatusFailed:
-				return status, fmt.Errorf("task failed")
-			case StatusPending, StatusProcessing:
+			case StateFail:
+				return status, fmt.Errorf("task failed: %s (code: %s)", status.Data.FailMsg, status.Data.FailCode)
+			case StateWaiting, StateQueuing, StateGenerating:
 				// Continue polling
 				continue
 			default:
-				return nil, fmt.Errorf("unknown task status: %s", status.Data.Status)
+				// Unknown state, continue polling
+				continue
 			}
 		}
 	}
@@ -249,9 +280,23 @@ func (c *NanoBananaClient) GenerateImage(ctx context.Context, prompt string, asp
 		return "", fmt.Errorf("failed to wait for completion: %w", err)
 	}
 
-	if status.Data.Output.ImageUrl == "" {
-		return "", fmt.Errorf("empty image URL in response")
+	return c.GetImageUrl(status)
+}
+
+// GetImageUrl extracts the first image URL from a TaskStatusResponse
+func (c *NanoBananaClient) GetImageUrl(status *TaskStatusResponse) (string, error) {
+	if status.Data.ResultJson == "" {
+		return "", fmt.Errorf("empty resultJson in response")
 	}
 
-	return status.Data.Output.ImageUrl, nil
+	var result ResultUrls
+	if err := json.Unmarshal([]byte(status.Data.ResultJson), &result); err != nil {
+		return "", fmt.Errorf("failed to parse resultJson: %w", err)
+	}
+
+	if len(result.ResultUrls) == 0 {
+		return "", fmt.Errorf("no image URLs in response")
+	}
+
+	return result.ResultUrls[0], nil
 }

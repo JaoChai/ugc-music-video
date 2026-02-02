@@ -2,10 +2,10 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -670,29 +670,26 @@ func testOpenRouterAPI(ctx context.Context, apiKey string, logger *zap.Logger) (
 	return true, "Connection successful"
 }
 
-// testKIEAPI tests the KIE API connection
+// kieCreditsResponse represents the response from KIE credits endpoint
+type kieCreditsResponse struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data int    `json:"data"`
+}
+
+// testKIEAPI tests the KIE API connection using the credits endpoint
+// API docs: https://docs.kie.ai/common-api/get-account-credits
 func testKIEAPI(ctx context.Context, apiKey string, logger *zap.Logger) (bool, string) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// Make a simple request to check credits/account status
-	// Using the Suno API endpoint for credits check
-	reqBody := map[string]interface{}{
-		"action": "credits",
-	}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		logger.Error("failed to marshal KIE request body", zap.Error(err))
-		return false, "Failed to create request"
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.kie.ai/api/v1/suno", bytes.NewBuffer(jsonBody))
+	// Use GET /api/v1/chat/credit endpoint per KIE docs
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.kie.ai/api/v1/chat/credit", nil)
 	if err != nil {
 		logger.Error("failed to create KIE request", zap.Error(err))
 		return false, "Failed to create request"
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -701,18 +698,46 @@ func testKIEAPI(ctx context.Context, apiKey string, logger *zap.Logger) (bool, s
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized {
-		return false, "Invalid API key"
-	}
-
-	// KIE may return different status codes, check for success range
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return true, "Connection successful"
-	}
-
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
-	logger.Error("KIE API error",
-		zap.Int("status_code", resp.StatusCode),
-		zap.String("body", string(body)))
-	return false, "API returned an error. Please try again later."
+
+	// Handle specific error codes per KIE API docs
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var creditsResp kieCreditsResponse
+		if err := json.Unmarshal(body, &creditsResp); err != nil {
+			logger.Warn("failed to parse KIE credits response", zap.Error(err))
+			return true, "Connection successful"
+		}
+		if creditsResp.Code == 200 {
+			return true, fmt.Sprintf("Connection successful. Credits: %d", creditsResp.Data)
+		}
+		return true, "Connection successful"
+
+	case http.StatusUnauthorized: // 401
+		return false, "Invalid API key"
+
+	case http.StatusPaymentRequired: // 402 - Insufficient Credits
+		return false, "Insufficient credits in your KIE account"
+
+	case http.StatusUnprocessableEntity: // 422
+		return false, "Validation error. Please check your API key format."
+
+	case http.StatusTooManyRequests: // 429
+		return false, "Rate limited. Please try again later."
+
+	case 455: // KIE-specific: Service Unavailable
+		return false, "KIE service temporarily unavailable. Please try again later."
+
+	case http.StatusInternalServerError: // 500
+		return false, "KIE server error. Please try again later."
+
+	case 505: // KIE-specific: Feature Disabled
+		return false, "This feature is disabled for your account"
+
+	default:
+		logger.Error("KIE API error",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("body", string(body)))
+		return false, fmt.Sprintf("API error (status %d). Please try again later.", resp.StatusCode)
+	}
 }

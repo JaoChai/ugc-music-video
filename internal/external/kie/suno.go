@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -19,12 +20,17 @@ const (
 	ModelV5       = "V5"
 )
 
-// Task status constants
+// Suno task status constants (per KIE API docs)
+// https://docs.kie.ai/suno-api/quickstart#status-codes-&-task-states
 const (
-	StatusPending    = "pending"
-	StatusProcessing = "processing"
-	StatusCompleted  = "completed"
-	StatusFailed     = "failed"
+	StatusPending             = "PENDING"
+	StatusTextSuccess         = "TEXT_SUCCESS"
+	StatusFirstSuccess        = "FIRST_SUCCESS"
+	StatusSuccess             = "SUCCESS"
+	StatusCreateTaskFailed    = "CREATE_TASK_FAILED"
+	StatusGenerateAudioFailed = "GENERATE_AUDIO_FAILED"
+	StatusCallbackException   = "CALLBACK_EXCEPTION"
+	StatusSensitiveWordError  = "SENSITIVE_WORD_ERROR"
 )
 
 // SunoClient represents a client for the KIE Suno API
@@ -54,20 +60,32 @@ type GenerateResponse struct {
 }
 
 // TaskResponse represents the response from the get task endpoint
+// https://docs.kie.ai/suno-api/quickstart#response-format
 type TaskResponse struct {
-	Code int `json:"code"`
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
 	Data struct {
-		Status string     `json:"status"`
-		Songs  []SongData `json:"songs"`
+		TaskId       string `json:"taskId"`
+		Status       string `json:"status"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		Response     struct {
+			SunoData []SongData `json:"sunoData"`
+		} `json:"response"`
 	} `json:"data"`
 }
 
 // SongData represents information about a generated song
+// https://docs.kie.ai/suno-api/quickstart#response-format
 type SongData struct {
-	Id       string  `json:"id"`
-	AudioUrl string  `json:"audioUrl"`
-	Title    string  `json:"title"`
-	Duration float64 `json:"duration"`
+	Id             string  `json:"id"`
+	AudioUrl       string  `json:"audioUrl"`
+	StreamAudioUrl string  `json:"streamAudioUrl,omitempty"`
+	ImageUrl       string  `json:"imageUrl,omitempty"`
+	Title          string  `json:"title"`
+	Prompt         string  `json:"prompt,omitempty"`
+	Tags           string  `json:"tags,omitempty"`
+	Duration       float64 `json:"duration"`
+	CreateTime     string  `json:"createTime,omitempty"`
 }
 
 // NewSunoClient creates a new SunoClient with the given API key and base URL
@@ -116,7 +134,7 @@ func (c *SunoClient) Generate(ctx context.Context, req GenerateRequest) (string,
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	if generateResp.Code != 0 {
+	if generateResp.Code != 200 {
 		return "", fmt.Errorf("API returned error code %d", generateResp.Code)
 	}
 
@@ -124,8 +142,11 @@ func (c *SunoClient) Generate(ctx context.Context, req GenerateRequest) (string,
 }
 
 // GetTask retrieves the status and results of a generation task
+// https://docs.kie.ai/suno-api/quickstart#step-2:-check-task-status
 func (c *SunoClient) GetTask(ctx context.Context, taskId string) (*TaskResponse, error) {
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/task/"+taskId, nil)
+	// Use correct endpoint: /api/v1/generate/record-info?taskId={taskId}
+	endpoint := fmt.Sprintf("%s/api/v1/generate/record-info?taskId=%s", c.baseURL, url.QueryEscape(taskId))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -152,19 +173,20 @@ func (c *SunoClient) GetTask(ctx context.Context, taskId string) (*TaskResponse,
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	if taskResp.Code != 0 {
-		return nil, fmt.Errorf("API returned error code %d", taskResp.Code)
+	if taskResp.Code != 200 {
+		return nil, fmt.Errorf("API returned error code %d: %s", taskResp.Code, taskResp.Msg)
 	}
 
 	return &taskResp, nil
 }
 
 // WaitForCompletion polls the task status until it's completed or times out
+// https://docs.kie.ai/suno-api/quickstart#status-codes-&-task-states
 func (c *SunoClient) WaitForCompletion(ctx context.Context, taskId string, timeout time.Duration) (*TaskResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(10 * time.Second) // KIE recommends 10 second intervals
 	defer ticker.Stop()
 
 	for {
@@ -178,15 +200,28 @@ func (c *SunoClient) WaitForCompletion(ctx context.Context, taskId string, timeo
 			}
 
 			switch taskResp.Data.Status {
-			case StatusCompleted:
+			case StatusSuccess:
 				return taskResp, nil
-			case StatusFailed:
-				return taskResp, fmt.Errorf("task failed")
-			case StatusPending, StatusProcessing:
+			case StatusFirstSuccess:
+				// First track generated - can be used if caller wants early results
+				return taskResp, nil
+			case StatusTextSuccess:
+				// Lyrics generated but audio not ready yet - continue polling
+				continue
+			case StatusCreateTaskFailed:
+				return taskResp, fmt.Errorf("task creation failed: %s", taskResp.Data.ErrorMessage)
+			case StatusGenerateAudioFailed:
+				return taskResp, fmt.Errorf("audio generation failed: %s", taskResp.Data.ErrorMessage)
+			case StatusCallbackException:
+				return taskResp, fmt.Errorf("callback exception: %s", taskResp.Data.ErrorMessage)
+			case StatusSensitiveWordError:
+				return taskResp, fmt.Errorf("content filtered due to sensitive words: %s", taskResp.Data.ErrorMessage)
+			case StatusPending:
 				// Continue polling
 				continue
 			default:
-				return nil, fmt.Errorf("unknown task status: %s", taskResp.Data.Status)
+				// Unknown status, continue polling
+				continue
 			}
 		}
 	}

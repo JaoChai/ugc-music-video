@@ -262,9 +262,9 @@ func HandleGenerateMusic(deps *Dependencies) asynq.HandlerFunc {
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("music generation failed: %v", err))
 		}
 
-		// Convert songs to models.GeneratedSong
-		generatedSongs := make([]models.GeneratedSong, len(taskResp.Data.Songs))
-		for i, song := range taskResp.Data.Songs {
+		// Convert songs to models.GeneratedSong (using new response structure)
+		generatedSongs := make([]models.GeneratedSong, len(taskResp.Data.Response.SunoData))
+		for i, song := range taskResp.Data.Response.SunoData {
 			generatedSongs[i] = models.GeneratedSong{
 				ID:       song.Id,
 				AudioURL: song.AudioUrl,
@@ -565,8 +565,12 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("image generation failed: %v", err))
 		}
 
-		// Update job with image URL
-		imageURL := statusResp.Data.Output.ImageUrl
+		// Update job with image URL (parse from ResultJson)
+		imageURL, err := nanoBananaClient.GetImageUrl(statusResp)
+		if err != nil {
+			logger.Error("failed to extract image URL from response", zap.Error(err))
+			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to get image URL: %v", err))
+		}
 		job.ImageURL = &imageURL
 		if err := deps.JobRepo.Update(ctx, job); err != nil {
 			logger.Error("failed to update job with image url", zap.Error(err))
