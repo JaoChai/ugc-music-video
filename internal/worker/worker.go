@@ -11,11 +11,10 @@ import (
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
 
-	"github.com/jaochai/ugc/internal/external/kie"
-	"github.com/jaochai/ugc/internal/external/openrouter"
 	"github.com/jaochai/ugc/internal/external/r2"
 	"github.com/jaochai/ugc/internal/ffmpeg"
 	"github.com/jaochai/ugc/internal/repository"
+	"github.com/jaochai/ugc/internal/service"
 	"github.com/jaochai/ugc/internal/worker/tasks"
 )
 
@@ -36,16 +35,15 @@ type TaskPayload struct {
 
 // Dependencies holds all dependencies needed by task handlers.
 type Dependencies struct {
-	JobRepo          repository.JobRepository
-	UserRepo         repository.UserRepository
-	OpenRouterClient *openrouter.Client
-	SunoClient       *kie.SunoClient
-	NanoBananaClient *kie.NanoBananaClient
-	R2Client         *r2.Client
-	FFmpegProcessor  *ffmpeg.Processor
-	AsynqClient      *asynq.Client
-	Logger           *zap.Logger
-	WebhookBaseURL   string // Base URL for webhooks, empty to use polling
+	JobRepo         repository.JobRepository
+	UserRepo        repository.UserRepository
+	CryptoService   service.CryptoService
+	R2Client        *r2.Client
+	FFmpegProcessor *ffmpeg.Processor
+	AsynqClient     *asynq.Client
+	Logger          *zap.Logger
+	WebhookBaseURL  string // Base URL for webhooks, empty to use polling
+	KIEBaseURL      string // Base URL for KIE API
 }
 
 // Worker represents the Asynq worker server.
@@ -97,16 +95,15 @@ func NewWorker(redisURL string, deps Dependencies, logger *zap.Logger) (*Worker,
 
 	// Convert worker.Dependencies to tasks.Dependencies
 	taskDeps := &tasks.Dependencies{
-		JobRepo:          deps.JobRepo,
-		UserRepo:         deps.UserRepo,
-		OpenRouterClient: deps.OpenRouterClient,
-		SunoClient:       deps.SunoClient,
-		NanoBananaClient: deps.NanoBananaClient,
-		R2Client:         deps.R2Client,
-		FFmpegProcessor:  deps.FFmpegProcessor,
-		AsynqClient:      deps.AsynqClient,
-		Logger:           deps.Logger,
-		WebhookBaseURL:   deps.WebhookBaseURL,
+		JobRepo:         deps.JobRepo,
+		UserRepo:        deps.UserRepo,
+		CryptoService:   deps.CryptoService,
+		R2Client:        deps.R2Client,
+		FFmpegProcessor: deps.FFmpegProcessor,
+		AsynqClient:     deps.AsynqClient,
+		Logger:          deps.Logger,
+		WebhookBaseURL:  deps.WebhookBaseURL,
+		KIEBaseURL:      deps.KIEBaseURL,
 	}
 
 	// Register task handlers using real implementations from tasks package

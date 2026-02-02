@@ -28,3 +28,13 @@ export interface ApiError {
   code?: string
   data?: Record<string, unknown>
 }
+
+export interface APIKeysStatus {
+  has_openrouter_key: boolean
+  has_kie_key: boolean
+}
+
+export interface UpdateAPIKeysInput {
+  openrouter_api_key?: string
+  kie_api_key?: string
+}

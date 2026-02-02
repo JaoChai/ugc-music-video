@@ -16,8 +16,6 @@ import (
 
 	"github.com/jaochai/ugc/internal/config"
 	"github.com/jaochai/ugc/internal/database"
-	"github.com/jaochai/ugc/internal/external/kie"
-	"github.com/jaochai/ugc/internal/external/openrouter"
 	"github.com/jaochai/ugc/internal/external/r2"
 	"github.com/jaochai/ugc/internal/ffmpeg"
 	"github.com/jaochai/ugc/internal/handler"
@@ -69,10 +67,8 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	jobRepo := repository.NewJobRepository(db)
 
-	// Create external clients
-	openRouterClient := openrouter.NewClient(cfg.OpenRouter.APIKey)
-	sunoClient := kie.NewSunoClient(cfg.KIE.APIKey, cfg.KIE.BaseURL)
-	nanoBananaClient := kie.NewNanoBananaClient(cfg.KIE.APIKey, cfg.KIE.BaseURL)
+	// Note: OpenRouter/KIE clients are now created per-user in worker tasks
+	// using encrypted API keys from the database
 
 	// Create R2 client (optional - skip if not configured)
 	var r2Client *r2.Client
@@ -93,6 +89,16 @@ func main() {
 		logger.Warn("R2 not configured - video uploads will be disabled")
 	}
 
+	// Create crypto service (required for API keys encryption)
+	if cfg.Crypto.EncryptionKey == "" {
+		logger.Fatal("ENCRYPTION_KEY is required - generate with: openssl rand -base64 32")
+	}
+	cryptoService, err := service.NewCryptoService(cfg.Crypto.EncryptionKey)
+	if err != nil {
+		logger.Fatal("failed to create crypto service", zap.Error(err))
+	}
+	logger.Info("crypto service initialized")
+
 	// Create services
 	authService := service.NewAuthService(userRepo, cfg.JWT.Secret, cfg.JWT.Expiry, logger)
 	jobService := service.NewJobService(jobRepo, logger)
@@ -111,16 +117,15 @@ func main() {
 
 	// Create worker dependencies
 	workerDeps := worker.Dependencies{
-		JobRepo:          jobRepo,
-		UserRepo:         userRepo,
-		OpenRouterClient: openRouterClient,
-		SunoClient:       sunoClient,
-		NanoBananaClient: nanoBananaClient,
-		R2Client:         r2Client,
-		FFmpegProcessor:  ffmpegProcessor,
-		AsynqClient:      asynqClient,
-		Logger:           logger,
-		WebhookBaseURL:   cfg.Webhook.BaseURL,
+		JobRepo:         jobRepo,
+		UserRepo:        userRepo,
+		CryptoService:   cryptoService,
+		R2Client:        r2Client,
+		FFmpegProcessor: ffmpegProcessor,
+		AsynqClient:     asynqClient,
+		Logger:          logger,
+		WebhookBaseURL:  cfg.Webhook.BaseURL,
+		KIEBaseURL:      cfg.KIE.BaseURL,
 	}
 
 	// Create worker
@@ -130,7 +135,7 @@ func main() {
 	}
 
 	// Setup Gin router
-	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, asynqClient, logger)
+	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, cryptoService, asynqClient, logger)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -210,6 +215,7 @@ func setupRouter(
 	jobService service.JobService,
 	jobRepo repository.JobRepository,
 	userRepo repository.UserRepository,
+	cryptoService service.CryptoService,
 	asynqClient *asynq.Client,
 	logger *zap.Logger,
 ) *gin.Engine {
@@ -247,12 +253,12 @@ func setupRouter(
 	v1 := router.Group("/api/v1")
 	{
 		// Auth routes
-		authHandler := handler.NewAuthHandler(authService, logger)
+		authHandler := handler.NewAuthHandler(authService, userRepo, cryptoService, logger)
 		authHandler.RegisterRoutes(v1)
 
 		// Job routes (protected)
 		authMiddleware := middleware.AuthMiddleware(authService, logger)
-		jobHandler := handler.NewJobHandler(jobService, userRepo, asynqClient, logger)
+		jobHandler := handler.NewJobHandler(jobService, userRepo, cryptoService, asynqClient, logger)
 		jobHandler.RegisterRoutes(v1, authMiddleware)
 
 		// Webhook routes (no auth required - external services)

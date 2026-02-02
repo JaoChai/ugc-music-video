@@ -10,6 +10,7 @@ import (
 
 	"github.com/jaochai/ugc/internal/middleware"
 	"github.com/jaochai/ugc/internal/models"
+	"github.com/jaochai/ugc/internal/repository"
 	"github.com/jaochai/ugc/internal/service"
 	"github.com/jaochai/ugc/pkg/response"
 )
@@ -27,15 +28,24 @@ type RefreshResponse struct {
 
 // AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
-	authService service.AuthService
-	logger      *zap.Logger
+	authService   service.AuthService
+	userRepo      repository.UserRepository
+	cryptoService service.CryptoService
+	logger        *zap.Logger
 }
 
 // NewAuthHandler creates a new AuthHandler instance
-func NewAuthHandler(authService service.AuthService, logger *zap.Logger) *AuthHandler {
+func NewAuthHandler(
+	authService service.AuthService,
+	userRepo repository.UserRepository,
+	cryptoService service.CryptoService,
+	logger *zap.Logger,
+) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		logger:      logger,
+		authService:   authService,
+		userRepo:      userRepo,
+		cryptoService: cryptoService,
+		logger:        logger,
 	}
 }
 
@@ -52,6 +62,9 @@ func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup) {
 		protected.Use(middleware.AuthMiddleware(h.authService, h.logger))
 		{
 			protected.GET("/me", h.Me)
+			protected.GET("/api-keys", h.GetAPIKeysStatus)
+			protected.PUT("/api-keys", h.UpdateAPIKeys)
+			protected.DELETE("/api-keys", h.DeleteAPIKeys)
 		}
 	}
 }
@@ -266,4 +279,164 @@ func (h *AuthHandler) validateLoginInput(input *models.LoginInput) error {
 	}
 
 	return nil
+}
+
+// GetAPIKeysStatus returns the status of user's API keys (has/doesn't have)
+// @Summary Get API keys status
+// @Description Returns whether the user has configured API keys (not the actual keys)
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=models.APIKeysStatusResponse}
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/api-keys [get]
+func (h *AuthHandler) GetAPIKeysStatus(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	openRouterKey, kieKey, err := h.userRepo.GetAPIKeys(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get API keys status", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	// Decrypt and check if keys exist (only check non-empty after decryption)
+	hasOpenRouterKey := false
+	hasKIEKey := false
+
+	if openRouterKey != nil && *openRouterKey != "" {
+		decrypted, err := h.cryptoService.Decrypt(*openRouterKey)
+		if err != nil {
+			h.logger.Warn("failed to decrypt OpenRouter API key", zap.Error(err), zap.String("user_id", userID.String()))
+		} else if decrypted != "" {
+			hasOpenRouterKey = true
+		}
+	}
+
+	if kieKey != nil && *kieKey != "" {
+		decrypted, err := h.cryptoService.Decrypt(*kieKey)
+		if err != nil {
+			h.logger.Warn("failed to decrypt KIE API key", zap.Error(err), zap.String("user_id", userID.String()))
+		} else if decrypted != "" {
+			hasKIEKey = true
+		}
+	}
+
+	response.Success(c, models.APIKeysStatusResponse{
+		HasOpenRouterKey: hasOpenRouterKey,
+		HasKIEKey:        hasKIEKey,
+	})
+}
+
+// UpdateAPIKeys updates the user's API keys
+// @Summary Update API keys
+// @Description Updates the user's API keys (encrypted at rest)
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param input body models.UpdateAPIKeysInput true "API keys to update"
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=models.APIKeysStatusResponse}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/api-keys [put]
+func (h *AuthHandler) UpdateAPIKeys(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	var input models.UpdateAPIKeysInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	// Get current keys
+	currentOpenRouterKey, currentKIEKey, err := h.userRepo.GetAPIKeys(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get current API keys", zap.Error(err))
+		response.Error(c, err)
+		return
+	}
+
+	// Encrypt new keys if provided, otherwise keep existing
+	var encryptedOpenRouterKey, encryptedKIEKey *string
+
+	if input.OpenRouterAPIKey != nil && *input.OpenRouterAPIKey != "" {
+		encrypted, err := h.cryptoService.Encrypt(*input.OpenRouterAPIKey)
+		if err != nil {
+			h.logger.Error("failed to encrypt OpenRouter API key", zap.Error(err))
+			response.Error(c, errors.New("failed to encrypt API key"))
+			return
+		}
+		encryptedOpenRouterKey = &encrypted
+	} else if input.OpenRouterAPIKey == nil {
+		// Keep existing key if not provided
+		encryptedOpenRouterKey = currentOpenRouterKey
+	}
+	// If input.OpenRouterAPIKey is empty string, set to nil (clear the key)
+
+	if input.KIEAPIKey != nil && *input.KIEAPIKey != "" {
+		encrypted, err := h.cryptoService.Encrypt(*input.KIEAPIKey)
+		if err != nil {
+			h.logger.Error("failed to encrypt KIE API key", zap.Error(err))
+			response.Error(c, errors.New("failed to encrypt API key"))
+			return
+		}
+		encryptedKIEKey = &encrypted
+	} else if input.KIEAPIKey == nil {
+		// Keep existing key if not provided
+		encryptedKIEKey = currentKIEKey
+	}
+	// If input.KIEAPIKey is empty string, set to nil (clear the key)
+
+	// Update keys in database
+	if err := h.userRepo.UpdateAPIKeys(c.Request.Context(), userID, encryptedOpenRouterKey, encryptedKIEKey); err != nil {
+		h.logger.Error("failed to update API keys", zap.Error(err))
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("API keys updated", zap.String("user_id", userID.String()))
+
+	// Return updated status
+	response.Success(c, models.APIKeysStatusResponse{
+		HasOpenRouterKey: encryptedOpenRouterKey != nil && *encryptedOpenRouterKey != "",
+		HasKIEKey:        encryptedKIEKey != nil && *encryptedKIEKey != "",
+	})
+}
+
+// DeleteAPIKeys removes all API keys for the user
+// @Summary Delete API keys
+// @Description Removes all API keys for the user
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 204 "No Content"
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/api-keys [delete]
+func (h *AuthHandler) DeleteAPIKeys(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	if err := h.userRepo.DeleteAPIKeys(c.Request.Context(), userID); err != nil {
+		h.logger.Error("failed to delete API keys", zap.Error(err))
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("API keys deleted", zap.String("user_id", userID.String()))
+	response.NoContent(c)
 }

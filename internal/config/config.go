@@ -18,6 +18,7 @@ type Config struct {
 	OpenRouter OpenRouterConfig
 	Webhook    WebhookConfig
 	CORS       CORSConfig
+	Crypto     CryptoConfig
 }
 
 // CORSConfig holds CORS-related configuration.
@@ -70,6 +71,11 @@ type OpenRouterConfig struct {
 // WebhookConfig holds webhook-related configuration.
 type WebhookConfig struct {
 	BaseURL string
+}
+
+// CryptoConfig holds encryption-related configuration.
+type CryptoConfig struct {
+	EncryptionKey string // Base64-encoded 32-byte key for AES-256
 }
 
 // Load reads configuration from environment variables and .env file.
@@ -129,6 +135,9 @@ func Load() (*Config, error) {
 		},
 		CORS: CORSConfig{
 			Origins: parseCORSOrigins(viper.GetString("CORS_ORIGINS")),
+		},
+		Crypto: CryptoConfig{
+			EncryptionKey: viper.GetString("ENCRYPTION_KEY"),
 		},
 	}
 

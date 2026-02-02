@@ -21,22 +21,50 @@ import (
 	"github.com/jaochai/ugc/internal/repository"
 )
 
+// CryptoService interface for decrypting API keys.
+type CryptoService interface {
+	Decrypt(ciphertext string) (string, error)
+}
+
 // Dependencies holds all external dependencies required by task handlers.
 type Dependencies struct {
 	JobRepo          repository.JobRepository
 	UserRepo         repository.UserRepository
-	OpenRouterClient *openrouter.Client
-	SunoClient       *kie.SunoClient
-	NanoBananaClient *kie.NanoBananaClient
+	CryptoService    CryptoService
 	R2Client         *r2.Client
 	FFmpegProcessor  *ffmpeg.Processor
 	AsynqClient      *asynq.Client
 	Logger           *zap.Logger
 	WebhookBaseURL   string // Base URL for webhooks, empty to disable
+	KIEBaseURL       string // Base URL for KIE API
 }
 
 // DefaultLLMModel is the default model to use if user hasn't configured one.
 const DefaultLLMModel = "anthropic/claude-3.5-sonnet"
+
+// getUserAPIKeys retrieves and decrypts the user's API keys.
+func getUserAPIKeys(ctx context.Context, deps *Dependencies, userID uuid.UUID) (openRouterKey, kieKey string, err error) {
+	encOpenRouterKey, encKIEKey, err := deps.UserRepo.GetAPIKeys(ctx, userID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get API keys: %w", err)
+	}
+
+	if encOpenRouterKey != nil && *encOpenRouterKey != "" {
+		openRouterKey, err = deps.CryptoService.Decrypt(*encOpenRouterKey)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to decrypt OpenRouter API key: %w", err)
+		}
+	}
+
+	if encKIEKey != nil && *encKIEKey != "" {
+		kieKey, err = deps.CryptoService.Decrypt(*encKIEKey)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to decrypt KIE API key: %w", err)
+		}
+	}
+
+	return openRouterKey, kieKey, nil
+}
 
 // HandleAnalyzeConcept creates a handler for the analyze concept task.
 // This handler:
@@ -81,14 +109,26 @@ func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc {
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to load user: %v", err))
 		}
 
+		// Get user's API keys
+		openRouterKey, _, err := getUserAPIKeys(ctx, deps, job.UserID)
+		if err != nil {
+			logger.Error("failed to get user API keys", zap.Error(err))
+			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to get API keys: %v", err))
+		}
+		if openRouterKey == "" {
+			logger.Error("user has no OpenRouter API key")
+			return markJobFailed(ctx, deps, payload.JobID, "user has no OpenRouter API key configured")
+		}
+
 		// Determine which LLM model to use
 		llmModel := user.OpenRouterModel
 		if llmModel == "" {
 			llmModel = DefaultLLMModel
 		}
 
-		// Create SongConceptAgent
-		agent := agents.NewSongConceptAgent(deps.OpenRouterClient, llmModel, logger)
+		// Create per-user OpenRouter client and SongConceptAgent
+		openRouterClient := openrouter.NewClient(openRouterKey)
+		agent := agents.NewSongConceptAgent(openRouterClient, llmModel, logger)
 
 		// Analyze concept
 		input := agents.SongConceptInput{
@@ -162,6 +202,20 @@ func HandleGenerateMusic(deps *Dependencies) asynq.HandlerFunc {
 			return markJobFailed(ctx, deps, payload.JobID, "job missing song_prompt")
 		}
 
+		// Get user's KIE API key
+		_, kieKey, err := getUserAPIKeys(ctx, deps, job.UserID)
+		if err != nil {
+			logger.Error("failed to get user API keys", zap.Error(err))
+			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to get API keys: %v", err))
+		}
+		if kieKey == "" {
+			logger.Error("user has no KIE API key")
+			return markJobFailed(ctx, deps, payload.JobID, "user has no KIE API key configured")
+		}
+
+		// Create per-user Suno client
+		sunoClient := kie.NewSunoClient(kieKey, deps.KIEBaseURL)
+
 		// Build Suno generate request
 		req := kie.GenerateRequest{
 			Prompt:       job.SongPrompt.Prompt,
@@ -178,7 +232,7 @@ func HandleGenerateMusic(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Call Suno API to start generation
-		taskID, err := deps.SunoClient.Generate(ctx, req)
+		taskID, err := sunoClient.Generate(ctx, req)
 		if err != nil {
 			logger.Error("failed to generate music", zap.Error(err))
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to generate music: %v", err))
@@ -202,7 +256,7 @@ func HandleGenerateMusic(deps *Dependencies) asynq.HandlerFunc {
 
 		// Otherwise, poll for completion
 		logger.Info("polling for music generation completion")
-		taskResp, err := deps.SunoClient.WaitForCompletion(ctx, taskID, 10*time.Minute)
+		taskResp, err := sunoClient.WaitForCompletion(ctx, taskID, 10*time.Minute)
 		if err != nil {
 			logger.Error("music generation failed or timed out", zap.Error(err))
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("music generation failed: %v", err))
@@ -281,14 +335,26 @@ func HandleSelectSong(deps *Dependencies) asynq.HandlerFunc {
 			logger.Error("failed to update job status", zap.Error(err))
 		}
 
+		// Get user's OpenRouter API key
+		openRouterKey, _, err := getUserAPIKeys(ctx, deps, job.UserID)
+		if err != nil {
+			logger.Error("failed to get user API keys", zap.Error(err))
+			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to get API keys: %v", err))
+		}
+		if openRouterKey == "" {
+			logger.Error("user has no OpenRouter API key")
+			return markJobFailed(ctx, deps, payload.JobID, "user has no OpenRouter API key configured")
+		}
+
 		// Determine LLM model
 		llmModel := job.LLMModel
 		if llmModel == "" {
 			llmModel = DefaultLLMModel
 		}
 
-		// Create SongSelectorAgent
-		agent := agents.NewSongSelectorAgent(deps.OpenRouterClient, llmModel, logger)
+		// Create per-user OpenRouter client and SongSelectorAgent
+		openRouterClient := openrouter.NewClient(openRouterKey)
+		agent := agents.NewSongSelectorAgent(openRouterClient, llmModel, logger)
 
 		// Build song candidates
 		candidates := make([]agents.SongCandidate, len(job.GeneratedSongs))
@@ -390,14 +456,30 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 			logger.Error("failed to update job status", zap.Error(err))
 		}
 
+		// Get user's API keys
+		openRouterKey, kieKey, err := getUserAPIKeys(ctx, deps, job.UserID)
+		if err != nil {
+			logger.Error("failed to get user API keys", zap.Error(err))
+			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to get API keys: %v", err))
+		}
+		if openRouterKey == "" {
+			logger.Error("user has no OpenRouter API key")
+			return markJobFailed(ctx, deps, payload.JobID, "user has no OpenRouter API key configured")
+		}
+		if kieKey == "" {
+			logger.Error("user has no KIE API key")
+			return markJobFailed(ctx, deps, payload.JobID, "user has no KIE API key configured")
+		}
+
 		// Determine LLM model
 		llmModel := job.LLMModel
 		if llmModel == "" {
 			llmModel = DefaultLLMModel
 		}
 
-		// Create ImageConceptAgent
-		agent := agents.NewImageConceptAgent(deps.OpenRouterClient, llmModel, logger)
+		// Create per-user OpenRouter client and ImageConceptAgent
+		openRouterClient := openrouter.NewClient(openRouterKey)
+		agent := agents.NewImageConceptAgent(openRouterClient, llmModel, logger)
 
 		// Build input
 		var songTitle, songStyle, lyrics string
@@ -434,6 +516,9 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 
 		logger.Info("image prompt generated", zap.Int("prompt_length", len(output.Prompt)))
 
+		// Create per-user NanoBanana client
+		nanoBananaClient := kie.NewNanoBananaClient(kieKey, deps.KIEBaseURL)
+
 		// Build NanoBanana request
 		req := kie.CreateTaskRequest{
 			Model: kie.ModelNanoBananaPro,
@@ -451,7 +536,7 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Create image generation task
-		nanoTaskID, err := deps.NanoBananaClient.CreateTask(ctx, req)
+		nanoTaskID, err := nanoBananaClient.CreateTask(ctx, req)
 		if err != nil {
 			logger.Error("failed to create image generation task", zap.Error(err))
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to create image task: %v", err))
@@ -474,7 +559,7 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 
 		// Otherwise, poll for completion
 		logger.Info("polling for image generation completion")
-		statusResp, err := deps.NanoBananaClient.WaitForCompletion(ctx, nanoTaskID, 5*time.Minute)
+		statusResp, err := nanoBananaClient.WaitForCompletion(ctx, nanoTaskID, 5*time.Minute)
 		if err != nil {
 			logger.Error("image generation failed or timed out", zap.Error(err))
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("image generation failed: %v", err))

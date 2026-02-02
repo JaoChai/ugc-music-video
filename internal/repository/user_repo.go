@@ -22,6 +22,9 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	UpdateAPIKeys(ctx context.Context, userID uuid.UUID, openRouterKey, kieKey *string) error
+	GetAPIKeys(ctx context.Context, userID uuid.UUID) (openRouterKey, kieKey *string, err error)
+	DeleteAPIKeys(ctx context.Context, userID uuid.UUID) error
 }
 
 // userRepository implements UserRepository using pgx.
@@ -62,7 +65,7 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 // GetByID retrieves a user by their ID.
 func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, openrouter_model, created_at, updated_at
+		SELECT id, email, password_hash, name, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -74,6 +77,8 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		&user.PasswordHash,
 		&user.Name,
 		&user.OpenRouterModel,
+		&user.OpenRouterAPIKey,
+		&user.KIEAPIKey,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -91,7 +96,7 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 // GetByEmail retrieves a user by their email address.
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, openrouter_model, created_at, updated_at
+		SELECT id, email, password_hash, name, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -103,6 +108,8 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.
 		&user.PasswordHash,
 		&user.Name,
 		&user.OpenRouterModel,
+		&user.OpenRouterAPIKey,
+		&user.KIEAPIKey,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -165,6 +172,65 @@ func (r *userRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result, err := r.db.Pool().Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// UpdateAPIKeys updates the encrypted API keys for a user.
+func (r *userRepository) UpdateAPIKeys(ctx context.Context, userID uuid.UUID, openRouterKey, kieKey *string) error {
+	query := `
+		UPDATE users
+		SET openrouter_api_key = $2, kie_api_key = $3, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, userID, openRouterKey, kieKey)
+	if err != nil {
+		return fmt.Errorf("failed to update API keys: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// GetAPIKeys retrieves the encrypted API keys for a user.
+func (r *userRepository) GetAPIKeys(ctx context.Context, userID uuid.UUID) (openRouterKey, kieKey *string, err error) {
+	query := `
+		SELECT openrouter_api_key, kie_api_key
+		FROM users
+		WHERE id = $1
+	`
+
+	err = r.db.Pool().QueryRow(ctx, query, userID).Scan(&openRouterKey, &kieKey)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, ErrUserNotFound
+		}
+		return nil, nil, fmt.Errorf("failed to get API keys: %w", err)
+	}
+
+	return openRouterKey, kieKey, nil
+}
+
+// DeleteAPIKeys removes the API keys for a user.
+func (r *userRepository) DeleteAPIKeys(ctx context.Context, userID uuid.UUID) error {
+	query := `
+		UPDATE users
+		SET openrouter_api_key = NULL, kie_api_key = NULL, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete API keys: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {

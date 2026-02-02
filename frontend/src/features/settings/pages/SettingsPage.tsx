@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout'
 import { useAuthStore } from '@/stores/auth.store'
 import { useUpdateProfileMutation } from '../hooks/useSettings'
+import { APIKeysSection } from '../components/APIKeysSection'
 import type { UpdateProfileInput } from '../api/settings.api'
 
 interface SettingsFormData {
@@ -163,6 +164,11 @@ export default function SettingsPage() {
             </Button>
           </div>
         </form>
+
+        {/* API Keys Section (separate form) */}
+        <div className="mt-6">
+          <APIKeysSection />
+        </div>
       </div>
     </DashboardLayout>
   )

@@ -19,24 +19,27 @@ import (
 
 // JobHandler handles job-related HTTP requests.
 type JobHandler struct {
-	jobService  service.JobService
-	userRepo    repository.UserRepository
-	asynqClient *asynq.Client
-	logger      *zap.Logger
+	jobService    service.JobService
+	userRepo      repository.UserRepository
+	cryptoService service.CryptoService
+	asynqClient   *asynq.Client
+	logger        *zap.Logger
 }
 
 // NewJobHandler creates a new JobHandler instance.
 func NewJobHandler(
 	jobService service.JobService,
 	userRepo repository.UserRepository,
+	cryptoService service.CryptoService,
 	asynqClient *asynq.Client,
 	logger *zap.Logger,
 ) *JobHandler {
 	return &JobHandler{
-		jobService:  jobService,
-		userRepo:    userRepo,
-		asynqClient: asynqClient,
-		logger:      logger,
+		jobService:    jobService,
+		userRepo:      userRepo,
+		cryptoService: cryptoService,
+		asynqClient:   asynqClient,
+		logger:        logger,
 	}
 }
 
@@ -94,7 +97,7 @@ func (h *JobHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Get user to retrieve default model
+	// Get user to retrieve default model and check API keys
 	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil {
 		h.logger.Error("failed to get user for job creation",
@@ -102,6 +105,35 @@ func (h *JobHandler) Create(c *gin.Context) {
 			zap.String("user_id", userID.String()),
 		)
 		response.Error(c, err)
+		return
+	}
+
+	// Validate user has required API keys (user already has encrypted keys from GetByID)
+	hasOpenRouterKey := false
+	if user.OpenRouterAPIKey != nil && *user.OpenRouterAPIKey != "" {
+		decrypted, err := h.cryptoService.Decrypt(*user.OpenRouterAPIKey)
+		if err != nil {
+			h.logger.Warn("failed to decrypt OpenRouter API key", zap.Error(err))
+		} else if decrypted != "" {
+			hasOpenRouterKey = true
+		}
+	}
+	if !hasOpenRouterKey {
+		response.BadRequest(c, "OpenRouter API key is required. Please configure in Settings.")
+		return
+	}
+
+	hasKIEKey := false
+	if user.KIEAPIKey != nil && *user.KIEAPIKey != "" {
+		decrypted, err := h.cryptoService.Decrypt(*user.KIEAPIKey)
+		if err != nil {
+			h.logger.Warn("failed to decrypt KIE API key", zap.Error(err))
+		} else if decrypted != "" {
+			hasKIEKey = true
+		}
+	}
+	if !hasKIEKey {
+		response.BadRequest(c, "KIE API key is required. Please configure in Settings.")
 		return
 	}
 

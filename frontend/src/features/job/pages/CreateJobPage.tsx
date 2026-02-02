@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Card, CardHeader, CardContent, CardFooter, Button, Input } from '@/components/ui'
-import { ArrowLeft, Sparkles } from 'lucide-react'
+import { ArrowLeft, Sparkles, AlertTriangle } from 'lucide-react'
 import { useCreateJob } from '../api'
+import { useAPIKeysStatus } from '@/features/settings/hooks/useApiKeys'
 
 export default function CreateJobPage() {
   const navigate = useNavigate()
   const createJob = useCreateJob()
+  const { data: keysStatus, isLoading: isLoadingKeys } = useAPIKeysStatus()
 
   const [concept, setConcept] = useState('')
   const [model, setModel] = useState('')
   const [errors, setErrors] = useState<{ concept?: string }>({})
+
+  const hasAllKeys = keysStatus?.has_openrouter_key && keysStatus?.has_kie_key
 
   const validateForm = () => {
     const newErrors: { concept?: string } = {}
@@ -36,8 +40,8 @@ export default function CreateJobPage() {
         model: model.trim() || undefined,
       })
       navigate(`/jobs/${job.id}`)
-    } catch (error) {
-      console.error('Failed to create job:', error)
+    } catch {
+      // Error is handled by React Query (createJob.isError)
     }
   }
 
@@ -74,6 +78,31 @@ export default function CreateJobPage() {
             </CardHeader>
 
             <CardContent className="space-y-6">
+              {/* API Keys Warning */}
+              {!isLoadingKeys && !hasAllKeys && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium text-amber-800">ต้องตั้งค่า API Keys ก่อน</h3>
+                      <p className="text-sm text-amber-700 mt-1">
+                        คุณต้องตั้งค่า API keys ก่อนสร้างงาน
+                        {!keysStatus?.has_openrouter_key && ' OpenRouter API Key'}
+                        {!keysStatus?.has_openrouter_key && !keysStatus?.has_kie_key && ' และ'}
+                        {!keysStatus?.has_kie_key && ' KIE API Key'}
+                        {' ยังไม่ได้ตั้งค่า'}
+                      </p>
+                      <Link
+                        to="/settings"
+                        className="inline-flex items-center gap-1 text-sm text-amber-800 hover:text-amber-900 font-medium mt-2"
+                      >
+                        ไปที่หน้าตั้งค่า →
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Concept */}
               <div>
                 <label htmlFor="concept" className="block text-sm font-medium text-gray-700 mb-1">
@@ -149,7 +178,11 @@ export default function CreateJobPage() {
                   ยกเลิก
                 </Button>
               </Link>
-              <Button type="submit" isLoading={createJob.isPending}>
+              <Button
+                type="submit"
+                isLoading={createJob.isPending}
+                disabled={!hasAllKeys || createJob.isPending}
+              >
                 <Sparkles className="h-4 w-4 mr-2" />
                 สร้างงาน
               </Button>
