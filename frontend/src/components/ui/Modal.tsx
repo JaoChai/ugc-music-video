@@ -90,8 +90,8 @@ function ModalHeader({ children, onClose, className }: ModalHeaderProps) {
       {onClose && (
         <button
           onClick={onClose}
-          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Close modal"
+          className="rounded-md p-1 text-gray-400 hover:bg-zinc-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          aria-label="ปิด"
         >
           <svg
             className="h-5 w-5"

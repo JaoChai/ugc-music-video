@@ -21,8 +21,8 @@ function NavLink({ to, icon: Icon, children }: NavLinkProps) {
       className={cn(
         'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
         isActive
-          ? 'bg-blue-50 text-blue-700'
-          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          ? 'bg-zinc-100 text-zinc-900'
+          : 'text-gray-600 hover:text-gray-900 hover:bg-zinc-100'
       )}
     >
       <Icon className="h-4 w-4" />
@@ -54,8 +54,8 @@ function UserDropdown() {
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
       >
-        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-          <User className="h-4 w-4 text-blue-600" />
+        <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center">
+          <User className="h-4 w-4 text-zinc-600" />
         </div>
         <span className="hidden sm:inline">{user?.name || user?.email || 'User'}</span>
         <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen && 'rotate-180')} />
@@ -73,7 +73,7 @@ function UserDropdown() {
             className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
           >
             <Settings className="h-4 w-4" />
-            Settings
+            ตั้งค่า
           </Link>
           <button
             onClick={() => {
@@ -83,7 +83,7 @@ function UserDropdown() {
             className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full"
           >
             <LogOut className="h-4 w-4" />
-            Logout
+            ออกจากระบบ
           </button>
         </div>
       )}
@@ -101,7 +101,7 @@ export function Navbar() {
           {/* Logo */}
           <div className="flex items-center gap-8">
             <Link to="/" className="flex items-center gap-2">
-              <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="h-8 w-8 bg-zinc-900 rounded-lg flex items-center justify-center">
                 <LayoutDashboard className="h-5 w-5 text-white" />
               </div>
               <span className="font-bold text-xl text-gray-900">UGC Platform</span>
@@ -110,8 +110,8 @@ export function Navbar() {
             {/* Navigation Links */}
             {isAuthenticated && (
               <div className="hidden md:flex items-center gap-1">
-                <NavLink to="/" icon={LayoutDashboard}>Dashboard</NavLink>
-                <NavLink to="/jobs" icon={Briefcase}>Jobs</NavLink>
+                <NavLink to="/" icon={LayoutDashboard}>แดชบอร์ด</NavLink>
+                <NavLink to="/jobs" icon={Briefcase}>งาน</NavLink>
               </div>
             )}
           </div>
@@ -123,10 +123,10 @@ export function Navbar() {
             ) : (
               <>
                 <Link to="/login">
-                  <Button variant="ghost" size="sm">Sign In</Button>
+                  <Button variant="ghost" size="sm">เข้าสู่ระบบ</Button>
                 </Link>
                 <Link to="/register">
-                  <Button size="sm">Sign Up</Button>
+                  <Button size="sm">สมัครสมาชิก</Button>
                 </Link>
               </>
             )}
@@ -138,8 +138,8 @@ export function Navbar() {
       {isAuthenticated && (
         <div className="md:hidden border-t border-gray-100">
           <div className="flex items-center gap-1 px-4 py-2">
-            <NavLink to="/" icon={LayoutDashboard}>Dashboard</NavLink>
-            <NavLink to="/jobs" icon={Briefcase}>Jobs</NavLink>
+            <NavLink to="/" icon={LayoutDashboard}>แดชบอร์ด</NavLink>
+            <NavLink to="/jobs" icon={Briefcase}>งาน</NavLink>
           </div>
         </div>
       )}

@@ -76,13 +76,13 @@ export const TERMINAL_STATUSES: JobStatus[] = ['completed', 'failed']
 
 // Status display names
 export const STATUS_DISPLAY_NAMES: Record<JobStatus, string> = {
-  pending: 'Pending',
-  analyzing: 'Analyzing',
-  generating_music: 'Generating Music',
-  selecting_song: 'Selecting Song',
-  generating_image: 'Generating Image',
-  processing_video: 'Processing Video',
-  uploading: 'Uploading',
-  completed: 'Completed',
-  failed: 'Failed',
+  pending: 'รอดำเนินการ',
+  analyzing: 'กำลังวิเคราะห์',
+  generating_music: 'กำลังสร้างเพลง',
+  selecting_song: 'กำลังเลือกเพลง',
+  generating_image: 'กำลังสร้างภาพ',
+  processing_video: 'กำลังประมวลผลวิดีโอ',
+  uploading: 'กำลังอัปโหลด',
+  completed: 'เสร็จสิ้น',
+  failed: 'ล้มเหลว',
 }

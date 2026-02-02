@@ -193,7 +193,7 @@ export function DownloadButton({ url, filename = 'video.mp4' }: DownloadButtonPr
   return (
     <Button onClick={handleDownload} variant="outline">
       <Download className="h-4 w-4 mr-2" />
-      Download Video
+      ดาวน์โหลดวิดีโอ
     </Button>
   )
 }

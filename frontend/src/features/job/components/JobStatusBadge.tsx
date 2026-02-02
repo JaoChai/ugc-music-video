@@ -9,12 +9,12 @@ interface JobStatusBadgeProps {
 
 const statusStyles: Record<JobStatus, string> = {
   pending: 'bg-gray-100 text-gray-800',
-  analyzing: 'bg-blue-100 text-blue-800',
-  generating_music: 'bg-blue-100 text-blue-800',
-  selecting_song: 'bg-blue-100 text-blue-800',
-  generating_image: 'bg-blue-100 text-blue-800',
-  processing_video: 'bg-blue-100 text-blue-800',
-  uploading: 'bg-blue-100 text-blue-800',
+  analyzing: 'bg-zinc-100 text-zinc-800',
+  generating_music: 'bg-zinc-100 text-zinc-800',
+  selecting_song: 'bg-zinc-100 text-zinc-800',
+  generating_image: 'bg-zinc-100 text-zinc-800',
+  processing_video: 'bg-zinc-100 text-zinc-800',
+  uploading: 'bg-zinc-100 text-zinc-800',
   completed: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
 }

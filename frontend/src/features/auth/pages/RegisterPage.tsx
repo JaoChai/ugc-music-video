@@ -37,7 +37,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthLayout title="Create Account" subtitle="Sign up to get started with UGC Platform.">
+    <AuthLayout title="สร้างบัญชี" subtitle="สมัครสมาชิกเพื่อเริ่มต้นใช้งาน UGC Platform">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {registerError && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -48,8 +48,8 @@ export default function RegisterPage() {
         <Input
           id="name"
           type="text"
-          label="Name (optional)"
-          placeholder="Your name"
+          label="ชื่อ (ไม่บังคับ)"
+          placeholder="ชื่อของคุณ"
           autoComplete="name"
           error={errors.name?.message}
           {...register('name')}
@@ -58,7 +58,7 @@ export default function RegisterPage() {
         <Input
           id="email"
           type="email"
-          label="Email"
+          label="อีเมล"
           placeholder="you@example.com"
           autoComplete="email"
           error={errors.email?.message}
@@ -68,8 +68,8 @@ export default function RegisterPage() {
         <Input
           id="password"
           type="password"
-          label="Password"
-          placeholder="Create a password (min. 8 characters)"
+          label="รหัสผ่าน"
+          placeholder="สร้างรหัสผ่าน (อย่างน้อย 8 ตัวอักษร)"
           autoComplete="new-password"
           error={errors.password?.message}
           {...register('password')}
@@ -78,23 +78,23 @@ export default function RegisterPage() {
         <Input
           id="confirmPassword"
           type="password"
-          label="Confirm Password"
-          placeholder="Confirm your password"
+          label="ยืนยันรหัสผ่าน"
+          placeholder="กรอกรหัสผ่านอีกครั้ง"
           autoComplete="new-password"
           error={errors.confirmPassword?.message}
           {...register('confirmPassword')}
         />
 
         <Button type="submit" className="w-full" isLoading={isRegistering}>
-          Sign Up
+          สมัครสมาชิก
         </Button>
       </form>
 
       <div className="mt-6 text-center">
         <p className="text-gray-600 text-sm">
-          Already have an account?{' '}
-          <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
-            Sign in
+          มีบัญชีอยู่แล้ว?{' '}
+          <Link to="/login" className="text-zinc-900 hover:text-zinc-700 font-medium hover:underline">
+            เข้าสู่ระบบ
           </Link>
         </p>
       </div>

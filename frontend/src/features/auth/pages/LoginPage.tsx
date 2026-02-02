@@ -30,7 +30,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Sign In" subtitle="Welcome back! Please sign in to continue.">
+    <AuthLayout title="เข้าสู่ระบบ" subtitle="ยินดีต้อนรับกลับ! กรุณาเข้าสู่ระบบเพื่อดำเนินการต่อ">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {loginError && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -41,7 +41,7 @@ export default function LoginPage() {
         <Input
           id="email"
           type="email"
-          label="Email"
+          label="อีเมล"
           placeholder="you@example.com"
           autoComplete="email"
           error={errors.email?.message}
@@ -51,23 +51,23 @@ export default function LoginPage() {
         <Input
           id="password"
           type="password"
-          label="Password"
-          placeholder="Enter your password"
+          label="รหัสผ่าน"
+          placeholder="กรอกรหัสผ่านของคุณ"
           autoComplete="current-password"
           error={errors.password?.message}
           {...register('password')}
         />
 
         <Button type="submit" className="w-full" isLoading={isLoggingIn}>
-          Sign In
+          เข้าสู่ระบบ
         </Button>
       </form>
 
       <div className="mt-6 text-center">
         <p className="text-gray-600 text-sm">
-          Don&apos;t have an account?{' '}
-          <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
-            Sign up
+          ยังไม่มีบัญชี?{' '}
+          <Link to="/register" className="text-zinc-900 hover:text-zinc-700 font-medium hover:underline">
+            สมัครสมาชิก
           </Link>
         </p>
       </div>

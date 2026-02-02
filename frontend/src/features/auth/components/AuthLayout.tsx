@@ -13,7 +13,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-xl mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-900 rounded-xl mb-4">
             <svg
               className="w-8 h-8 text-white"
               fill="none"
@@ -43,7 +43,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
 
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
-          &copy; {new Date().getFullYear()} UGC Platform. All rights reserved.
+          &copy; {new Date().getFullYear()} UGC Platform สงวนลิขสิทธิ์
         </p>
       </div>
     </div>

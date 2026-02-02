@@ -34,13 +34,13 @@ export default function JobDetailPage() {
 
   const handleCancel = async () => {
     if (!id) return
-    if (confirm('Are you sure you want to cancel this job?')) {
+    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกงานนี้?')) {
       await cancelJob.mutateAsync(id)
     }
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('th-TH', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -52,7 +52,7 @@ export default function JobDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-500"></div>
       </div>
     )
   }
@@ -66,7 +66,7 @@ export default function JobDetailPage() {
               <Link to="/jobs" className="text-gray-600 hover:text-gray-900">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Job Not Found</h1>
+              <h1 className="text-2xl font-bold text-gray-900">ไม่พบงาน</h1>
             </div>
           </div>
         </div>
@@ -74,12 +74,12 @@ export default function JobDetailPage() {
           <Card>
             <CardContent className="py-12 text-center">
               <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Job not found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">ไม่พบงาน</h3>
               <p className="text-gray-600 mb-4">
-                The job you're looking for doesn't exist or has been deleted.
+                งานที่คุณกำลังค้นหาไม่มีอยู่หรือถูกลบไปแล้ว
               </p>
               <Link to="/jobs">
-                <Button>Back to Jobs</Button>
+                <Button>กลับไปหน้างาน</Button>
               </Link>
             </CardContent>
           </Card>
@@ -101,7 +101,7 @@ export default function JobDetailPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Link>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Job Details</h1>
+                <h1 className="text-2xl font-bold text-gray-900">รายละเอียดงาน</h1>
                 <p className="text-sm text-gray-500 font-mono">{currentJob.id}</p>
               </div>
             </div>
@@ -113,7 +113,7 @@ export default function JobDetailPage() {
                 isLoading={cancelJob.isPending}
               >
                 <XCircle className="h-4 w-4 mr-2" />
-                Cancel Job
+                ยกเลิกงาน
               </Button>
             )}
           </div>
@@ -140,11 +140,11 @@ export default function JobDetailPage() {
                 <div className="flex items-center gap-6 text-sm text-gray-500">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
-                    <span>Created: {formatDate(currentJob.created_at)}</span>
+                    <span>สร้างเมื่อ: {formatDate(currentJob.created_at)}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="h-4 w-4" />
-                    <span>Updated: {formatDate(currentJob.updated_at)}</span>
+                    <span>อัปเดตเมื่อ: {formatDate(currentJob.updated_at)}</span>
                   </div>
                 </div>
               </CardContent>
@@ -156,7 +156,7 @@ export default function JobDetailPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2 text-red-700">
                     <AlertTriangle className="h-5 w-5" />
-                    <h2 className="text-lg font-semibold">Error</h2>
+                    <h2 className="text-lg font-semibold">ข้อผิดพลาด</h2>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -171,17 +171,17 @@ export default function JobDetailPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Music className="h-5 w-5 text-purple-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Song Prompt</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">คำสั่งสร้างเพลง</h2>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <dt className="text-sm text-gray-500">Title</dt>
+                      <dt className="text-sm text-gray-500">ชื่อเพลง</dt>
                       <dd className="text-gray-900 font-medium">{currentJob.song_prompt.title}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm text-gray-500">Style</dt>
+                      <dt className="text-sm text-gray-500">สไตล์</dt>
                       <dd className="text-gray-900">{currentJob.song_prompt.style}</dd>
                     </div>
                   </div>
@@ -204,7 +204,7 @@ export default function JobDetailPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <Music className="h-5 w-5 text-purple-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Generated Songs</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">เพลงที่สร้าง</h2>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -214,13 +214,13 @@ export default function JobDetailPage() {
                         <span className="font-medium text-gray-900">{song.title}</span>
                         {currentJob.selected_song_id === song.id && (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                            Selected
+                            เลือกแล้ว
                           </span>
                         )}
                       </div>
                       {song.audio_url && (
                         <audio controls className="w-full" src={song.audio_url}>
-                          Your browser does not support the audio element.
+                          เบราว์เซอร์ของคุณไม่รองรับการเล่นเสียง
                         </audio>
                       )}
                     </div>
@@ -235,7 +235,7 @@ export default function JobDetailPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2">
                     <ImageIcon className="h-5 w-5 text-green-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Generated Image</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">ภาพที่สร้าง</h2>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -254,8 +254,8 @@ export default function JobDetailPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Video className="h-5 w-5 text-blue-600" />
-                      <h2 className="text-lg font-semibold text-gray-900">Generated Video</h2>
+                      <Video className="h-5 w-5 text-zinc-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">วิดีโอที่สร้าง</h2>
                     </div>
                     <DownloadButton
                       url={currentJob.video_url}
@@ -278,10 +278,10 @@ export default function JobDetailPage() {
             {/* Progress Timeline */}
             <Card>
               <CardHeader>
-                <h3 className="font-semibold text-gray-900">Progress</h3>
+                <h3 className="font-semibold text-gray-900">ความคืบหน้า</h3>
                 {!isTerminal && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Auto-refreshing every 5 seconds...
+                    รีเฟรชอัตโนมัติทุก 5 วินาที...
                   </p>
                 )}
               </CardHeader>
@@ -293,32 +293,32 @@ export default function JobDetailPage() {
             {/* Job Info */}
             <Card>
               <CardHeader>
-                <h3 className="font-semibold text-gray-900">Job Information</h3>
+                <h3 className="font-semibold text-gray-900">ข้อมูลงาน</h3>
               </CardHeader>
               <CardContent>
                 <dl className="space-y-4">
                   <div>
-                    <dt className="text-sm text-gray-500">Job ID</dt>
+                    <dt className="text-sm text-gray-500">รหัสงาน</dt>
                     <dd className="text-gray-900 font-mono text-sm break-all">{currentJob.id}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">Status</dt>
+                    <dt className="text-sm text-gray-500">สถานะ</dt>
                     <dd className="mt-1">
                       <JobStatusBadge status={currentJob.status} />
                     </dd>
                   </div>
                   {currentJob.llm_model && (
                     <div>
-                      <dt className="text-sm text-gray-500">Model</dt>
+                      <dt className="text-sm text-gray-500">โมเดล</dt>
                       <dd className="text-gray-900 font-mono text-sm">{currentJob.llm_model}</dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-sm text-gray-500">Created</dt>
+                    <dt className="text-sm text-gray-500">สร้างเมื่อ</dt>
                     <dd className="text-gray-900 text-sm">{formatDate(currentJob.created_at)}</dd>
                   </div>
                   <div>
-                    <dt className="text-sm text-gray-500">Last Updated</dt>
+                    <dt className="text-sm text-gray-500">อัปเดตล่าสุด</dt>
                     <dd className="text-gray-900 text-sm">{formatDate(currentJob.updated_at)}</dd>
                   </div>
                 </dl>
@@ -328,18 +328,18 @@ export default function JobDetailPage() {
             {/* Quick Actions */}
             <Card>
               <CardHeader>
-                <h3 className="font-semibold text-gray-900">Actions</h3>
+                <h3 className="font-semibold text-gray-900">ดำเนินการ</h3>
               </CardHeader>
               <CardContent className="space-y-2">
                 <Link to="/jobs" className="block">
                   <Button variant="outline" className="w-full">
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Jobs
+                    กลับไปหน้างาน
                   </Button>
                 </Link>
                 <Link to="/jobs/create" className="block">
                   <Button variant="outline" className="w-full">
-                    Create New Job
+                    สร้างงานใหม่
                   </Button>
                 </Link>
                 {currentJob.video_url && (

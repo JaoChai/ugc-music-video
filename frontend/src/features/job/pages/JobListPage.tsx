@@ -8,16 +8,16 @@ import type { JobStatus } from '../types'
 import { TERMINAL_STATUSES } from '../types'
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'analyzing', label: 'Analyzing' },
-  { value: 'generating_music', label: 'Generating Music' },
-  { value: 'selecting_song', label: 'Selecting Song' },
-  { value: 'generating_image', label: 'Generating Image' },
-  { value: 'processing_video', label: 'Processing Video' },
-  { value: 'uploading', label: 'Uploading' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'failed', label: 'Failed' },
+  { value: '', label: 'สถานะทั้งหมด' },
+  { value: 'pending', label: 'รอดำเนินการ' },
+  { value: 'analyzing', label: 'กำลังวิเคราะห์' },
+  { value: 'generating_music', label: 'กำลังสร้างเพลง' },
+  { value: 'selecting_song', label: 'กำลังเลือกเพลง' },
+  { value: 'generating_image', label: 'กำลังสร้างภาพ' },
+  { value: 'processing_video', label: 'กำลังประมวลผลวิดีโอ' },
+  { value: 'uploading', label: 'กำลังอัปโหลด' },
+  { value: 'completed', label: 'เสร็จสิ้น' },
+  { value: 'failed', label: 'ล้มเหลว' },
 ]
 
 export default function JobListPage() {
@@ -49,13 +49,13 @@ export default function JobListPage() {
   const handleCancelJob = async (id: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (confirm('Are you sure you want to cancel this job?')) {
+    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกงานนี้?')) {
       await cancelJob.mutateAsync(id)
     }
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Date(dateString).toLocaleDateString('th-TH', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -74,12 +74,12 @@ export default function JobListPage() {
               <Link to="/" className="text-gray-600 hover:text-gray-900">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
+              <h1 className="text-2xl font-bold text-gray-900">งาน</h1>
             </div>
             <Link to="/jobs/create">
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Job
+                สร้างงาน
               </Button>
             </Link>
           </div>
@@ -94,7 +94,7 @@ export default function JobListPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
-                placeholder="Search by concept..."
+                placeholder="ค้นหาด้วย concept..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-10"
@@ -110,7 +110,7 @@ export default function JobListPage() {
               )}
             </div>
             <Button type="submit" variant="outline">
-              Search
+              ค้นหา
             </Button>
           </form>
 
@@ -121,7 +121,7 @@ export default function JobListPage() {
               setStatusFilter(e.target.value)
               setPage(1)
             }}
-            className="block rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 focus:outline-none"
+            className="block rounded-lg border border-gray-300 px-4 py-2 text-gray-900 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500 focus:ring-opacity-50 focus:outline-none"
           >
             {STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -136,29 +136,29 @@ export default function JobListPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-zinc-500"></div>
           </div>
         ) : error ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-red-600">Error loading jobs. Please try again.</p>
+              <p className="text-red-600">เกิดข้อผิดพลาดในการโหลดงาน กรุณาลองอีกครั้ง</p>
             </CardContent>
           </Card>
         ) : !data?.jobs?.length ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">ไม่พบงาน</h3>
               <p className="text-gray-600 mb-4">
                 {searchQuery || statusFilter
-                  ? 'Try adjusting your filters.'
-                  : 'Get started by creating your first job.'}
+                  ? 'ลองปรับตัวกรองของคุณ'
+                  : 'เริ่มต้นโดยการสร้างงานแรกของคุณ'}
               </p>
               {!searchQuery && !statusFilter && (
                 <Link to="/jobs/create">
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Job
+                    สร้างงาน
                   </Button>
                 </Link>
               )}
@@ -176,13 +176,13 @@ export default function JobListPage() {
                         Concept
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
+                        สถานะ
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Created
+                        สร้างเมื่อ
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
+                        ดำเนินการ
                       </th>
                     </tr>
                   </thead>
@@ -245,8 +245,8 @@ export default function JobListPage() {
             {data.meta && data.meta.total_pages > 1 && (
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-sm text-gray-700">
-                  Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, data.meta.total)} of{' '}
-                  {data.meta.total} results
+                  แสดง {(page - 1) * 10 + 1} ถึง {Math.min(page * 10, data.meta.total)} จาก{' '}
+                  {data.meta.total} รายการ
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -255,7 +255,7 @@ export default function JobListPage() {
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page === 1}
                   >
-                    Previous
+                    ก่อนหน้า
                   </Button>
                   <Button
                     variant="outline"
@@ -263,7 +263,7 @@ export default function JobListPage() {
                     onClick={() => setPage((p) => Math.min(data.meta!.total_pages, p + 1))}
                     disabled={page === data.meta.total_pages}
                   >
-                    Next
+                    ถัดไป
                   </Button>
                 </div>
               </div>

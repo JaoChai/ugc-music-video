@@ -12,7 +12,7 @@ interface RecentJobsListProps {
 // Status badge styling
 const statusStyles: Record<JobStatus, { bg: string; text: string; icon: typeof CheckCircle2 }> = {
   pending: { bg: 'bg-gray-100', text: 'text-gray-700', icon: Clock },
-  analyzing: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Loader2 },
+  analyzing: { bg: 'bg-zinc-100', text: 'text-zinc-700', icon: Loader2 },
   generating_music: { bg: 'bg-purple-100', text: 'text-purple-700', icon: Loader2 },
   selecting_song: { bg: 'bg-purple-100', text: 'text-purple-700', icon: Loader2 },
   generating_image: { bg: 'bg-indigo-100', text: 'text-indigo-700', icon: Loader2 },
@@ -43,12 +43,12 @@ function formatDate(dateString: string): string {
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
 
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays < 7) return `${diffDays}d ago`
+  if (diffMins < 1) return 'เมื่อสักครู่'
+  if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`
+  if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`
+  if (diffDays < 7) return `${diffDays} วันที่แล้ว`
 
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return date.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })
 }
 
 function truncateText(text: string, maxLength: number = 50): string {
@@ -79,8 +79,8 @@ function EmptyState() {
   return (
     <div className="py-12 text-center">
       <Briefcase className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-      <h3 className="text-sm font-medium text-gray-900 mb-1">No jobs yet</h3>
-      <p className="text-sm text-gray-500">Create your first job to get started</p>
+      <h3 className="text-sm font-medium text-gray-900 mb-1">ยังไม่มีงาน</h3>
+      <p className="text-sm text-gray-500">สร้างงานแรกของคุณเพื่อเริ่มต้น</p>
     </div>
   )
 }

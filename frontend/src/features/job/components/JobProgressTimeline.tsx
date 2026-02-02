@@ -62,7 +62,7 @@ export function JobProgressTimeline({ currentStatus, className }: JobProgressTim
                         <Check className="h-5 w-5 text-white" aria-hidden="true" />
                       </span>
                     ) : isCurrent ? (
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 ring-4 ring-blue-100">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 ring-4 ring-zinc-100">
                         <Loader2 className="h-5 w-5 text-white animate-spin" aria-hidden="true" />
                       </span>
                     ) : isFailedStep || (isFailed && stepIndex > currentIndex) ? (
@@ -86,7 +86,7 @@ export function JobProgressTimeline({ currentStatus, className }: JobProgressTim
                       className={cn(
                         'text-sm font-medium',
                         isCompleted && 'text-green-600',
-                        isCurrent && 'text-blue-600',
+                        isCurrent && 'text-zinc-900',
                         (isFuture || isFailed) && 'text-gray-500'
                       )}
                     >

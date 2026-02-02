@@ -13,8 +13,8 @@ interface StatsCardProps {
 
 const variantStyles: Record<StatsCardVariant, { bg: string; iconColor: string }> = {
   blue: {
-    bg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
+    bg: 'bg-zinc-100',
+    iconColor: 'text-zinc-600',
   },
   green: {
     bg: 'bg-green-100',
