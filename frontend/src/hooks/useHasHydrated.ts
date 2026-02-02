@@ -1,28 +1,34 @@
-import { useSyncExternalStore } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/auth.store'
 
 /**
  * Hook to safely subscribe to Zustand persist hydration state.
- * Uses useSyncExternalStore to ensure proper React lifecycle integration.
  *
- * This solves the issue where onRehydrateStorage setState calls happen
- * outside React's lifecycle and don't trigger re-renders.
+ * Uses useState + useEffect pattern to handle the race condition where
+ * hydration may complete between initial render and effect execution.
  */
 export function useHasHydrated(): boolean {
-  return useSyncExternalStore(
-    // subscribe: called when component mounts, returns unsubscribe function
-    (onStoreChange) => {
-      // If already hydrated, no need to subscribe
-      if (useAuthStore.persist.hasHydrated()) {
-        return () => {}
-      }
-
-      // Subscribe to hydration completion
-      return useAuthStore.persist.onFinishHydration(onStoreChange)
-    },
-    // getSnapshot: returns current hydration state (client)
-    () => useAuthStore.persist.hasHydrated(),
-    // getServerSnapshot: returns false during SSR
-    () => false
+  const [hasHydrated, setHasHydrated] = useState(
+    useAuthStore.persist.hasHydrated()
   )
+
+  useEffect(() => {
+    // Skip subscription if already hydrated
+    if (hasHydrated) return
+
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => {
+      setHasHydrated(true)
+    })
+
+    // Handle race condition: hydration may have completed between
+    // useState initialization and this effect running.
+    // Use queueMicrotask to avoid synchronous setState in effect body.
+    if (useAuthStore.persist.hasHydrated()) {
+      queueMicrotask(() => setHasHydrated(true))
+    }
+
+    return unsubscribe
+  }, [hasHydrated])
+
+  return hasHydrated
 }
