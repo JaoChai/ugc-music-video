@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth.store'
 import { authApi, type LoginRequest, type RegisterRequest } from '../api/auth.api'
 import type { AxiosError } from 'axios'
@@ -9,17 +9,26 @@ interface ApiErrorResponse {
   data?: Record<string, { message: string }>
 }
 
+interface LocationState {
+  from?: string
+}
+
 export function useAuth() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const { login: storeLogin, logout: storeLogout, isAuthenticated } = useAuthStore()
+
+  // Get the intended destination from location state (set by PrivateRoute)
+  const from = (location.state as LocationState)?.from || '/'
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authApi.login(data),
     onSuccess: (response) => {
       storeLogin(response.record, response.token)
       queryClient.invalidateQueries({ queryKey: ['user'] })
-      navigate('/')
+      // Redirect to intended destination or home
+      navigate(from, { replace: true })
     },
   })
 

@@ -19,8 +19,5 @@ export type {
 // Auth API
 export { login, register, refresh, getMe } from './auth'
 
-// Jobs API
-export { createJob, getJobs, getJob, cancelJob } from './jobs'
-
 // Axios instance
 export { api } from '@/lib/axios'

@@ -92,7 +92,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <Link to="/jobs/new" className="block">
+                <Link to="/jobs/create" className="block">
                   <Button className="w-full justify-start" size="lg">
                     <Plus className="h-5 w-5 mr-3" />
                     Create New Job

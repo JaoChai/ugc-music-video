@@ -1,11 +1,14 @@
 import { QueryProvider } from '@/providers/QueryProvider'
 import { AppRouter } from '@/router'
+import { ErrorBoundary } from '@/components'
 
 function App() {
   return (
-    <QueryProvider>
-      <AppRouter />
-    </QueryProvider>
+    <ErrorBoundary>
+      <QueryProvider>
+        <AppRouter />
+      </QueryProvider>
+    </ErrorBoundary>
   )
 }
 

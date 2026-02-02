@@ -1,71 +1,62 @@
 # Current Tasks
 
-## High Priority
-
-### [ ] Add DownloadButton to JobDetailPage
-
-**Priority:** High
-**Files:** `frontend/src/features/job/pages/JobDetailPage.tsx`
-
-#### Description
-Completed jobs have `video_url` but no way to download.
-
-#### Acceptance Criteria
-- [ ] DownloadButton component shows when job.status === 'completed'
-- [ ] Button triggers file download
-- [ ] Proper loading state during download
-
----
-
-### [ ] Fix route inconsistencies
-
-**Priority:** High
-**Files:** `frontend/src/router/index.tsx`
-
-#### Description
-Routes use inconsistent patterns: `/jobs/new` vs `/jobs/create`
-
-#### Acceptance Criteria
-- [ ] Standardize to `/jobs/create`
-- [ ] Update all links and navigation
-- [ ] Add redirect from old route if needed
-
----
-
-## Improvements
-
-### [ ] Add authentication guards
-
-**Priority:** Medium
-**Files:** `frontend/src/router/index.tsx`
-
-#### Description
-Protected routes (dashboard, jobs) should redirect to login if not authenticated.
-
-#### Acceptance Criteria
-- [ ] PrivateRoute component wraps protected routes
-- [ ] Redirects to `/login` if no token
-- [ ] Preserves intended destination for redirect after login
-
----
-
-### [ ] Add error boundaries
-
-**Priority:** Medium
-**Files:** `frontend/src/App.tsx`, `frontend/src/components/ErrorBoundary.tsx`
-
-#### Description
-Unhandled React errors crash the entire app.
-
-#### Acceptance Criteria
-- [ ] ErrorBoundary component catches render errors
-- [ ] Shows user-friendly error message
-- [ ] Provides "Try Again" action
-- [ ] Logs error to console (or error service)
+No open tasks. All tasks completed.
 
 ---
 
 ## Completed
+
+### [x] Add authentication guards (2026-02-02)
+
+**Files changed:**
+- Created `frontend/src/components/PrivateRoute.tsx`
+- Created `frontend/src/components/index.ts`
+- Updated `frontend/src/router/index.tsx` - wrap protected routes with PrivateRoute
+- Updated `frontend/src/features/auth/hooks/useAuth.ts` - redirect to intended destination after login
+
+**Changes:**
+- PrivateRoute component redirects to `/login` if not authenticated
+- Preserves intended destination in location state
+- After login, redirects back to intended page
+- Protected routes: `/`, `/jobs`, `/jobs/create`, `/jobs/:id`, `/settings`
+
+---
+
+### [x] Add error boundaries (2026-02-02)
+
+**Files changed:**
+- Created `frontend/src/components/ErrorBoundary.tsx`
+- Updated `frontend/src/App.tsx` - wrap app with ErrorBoundary
+
+**Changes:**
+- ErrorBoundary component catches React render errors
+- Shows user-friendly error page with "Try Again" and "Refresh" buttons
+- Shows error details in development mode
+- Logs errors to console
+
+---
+
+### [x] Fix route inconsistencies (2026-02-02)
+
+**Files changed:**
+- Updated `frontend/src/features/dashboard/pages/DashboardPage.tsx`
+
+**Changes:**
+- Changed `/jobs/new` → `/jobs/create` in Quick Actions link
+- All routes now consistently use `/jobs/create`
+
+---
+
+### [x] Add DownloadButton to JobDetailPage (2026-02-02)
+
+**Status:** Already implemented
+
+**Verification:**
+- DownloadButton component exists in `frontend/src/features/job/components/VideoPlayer.tsx`
+- Already exported from components index
+- Already used in JobDetailPage when video_url exists
+
+---
 
 ### [x] Consolidate duplicate job APIs (2026-02-02)
 
@@ -77,6 +68,7 @@ Unhandled React errors crash the entire app.
 - Fixed `frontend/src/features/job/pages/JobDetailPage.tsx` - use new field names
 - Fixed `frontend/src/features/job/pages/JobListPage.tsx` - use new data structure
 - Fixed `frontend/src/features/dashboard/components/RecentJobsList.tsx`
+- Updated `frontend/src/api/index.ts` - removed jobs export
 
 **Changes:**
 - Removed duplicate api/jobs.ts file

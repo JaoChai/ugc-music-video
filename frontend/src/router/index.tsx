@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { lazy, Suspense, type ComponentType } from 'react'
+import { PrivateRoute } from '@/components'
 
 // Lazy load pages for better performance
 const Dashboard = lazy(() => import('@/features/dashboard/pages/DashboardPage'))
@@ -28,11 +29,19 @@ function withSuspense(Component: ComponentType) {
   )
 }
 
+// Wrap with both Suspense and PrivateRoute for protected pages
+function withPrivateRoute(Component: ComponentType) {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <PrivateRoute>
+        <Component />
+      </PrivateRoute>
+    </Suspense>
+  )
+}
+
 const router = createBrowserRouter([
-  {
-    path: '/',
-    element: withSuspense(Dashboard),
-  },
+  // Public routes
   {
     path: '/login',
     element: withSuspense(Login),
@@ -41,21 +50,26 @@ const router = createBrowserRouter([
     path: '/register',
     element: withSuspense(Register),
   },
+  // Protected routes
+  {
+    path: '/',
+    element: withPrivateRoute(Dashboard),
+  },
   {
     path: '/jobs',
-    element: withSuspense(JobList),
+    element: withPrivateRoute(JobList),
   },
   {
     path: '/jobs/create',
-    element: withSuspense(CreateJob),
+    element: withPrivateRoute(CreateJob),
   },
   {
     path: '/jobs/:id',
-    element: withSuspense(JobDetail),
+    element: withPrivateRoute(JobDetail),
   },
   {
     path: '/settings',
-    element: withSuspense(Settings),
+    element: withPrivateRoute(Settings),
   },
 ])
 
