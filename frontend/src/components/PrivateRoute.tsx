@@ -6,19 +6,9 @@ interface PrivateRouteProps {
 }
 
 export function PrivateRoute({ children }: PrivateRouteProps) {
-  // Get hydration and auth state directly from store (no separate hook needed)
-  const hasHydrated = useAuthStore((state) => state._hasHydrated)
+  // isAuthenticated is persisted to localStorage, so it's available immediately after hydration
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const location = useLocation()
-
-  // Wait for Zustand to hydrate from localStorage before making auth decisions
-  if (!hasHydrated) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    )
-  }
 
   if (!isAuthenticated) {
     // Redirect to login, preserving the intended destination

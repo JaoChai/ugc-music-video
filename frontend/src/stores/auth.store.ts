@@ -6,7 +6,6 @@ interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
-  _hasHydrated: boolean
   setUser: (user: User | null) => void
   setToken: (token: string | null) => void
   login: (user: User, token: string) => void
@@ -19,7 +18,6 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      _hasHydrated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       setToken: (token) => {
         if (token) {
@@ -31,7 +29,7 @@ export const useAuthStore = create<AuthState>()(
       },
       login: (user, token) => {
         localStorage.setItem('auth_token', token)
-        set({ user, token, isAuthenticated: true, _hasHydrated: true })
+        set({ user, token, isAuthenticated: true })
       },
       logout: () => {
         localStorage.removeItem('auth_token')
@@ -40,16 +38,12 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, token: state.token }),
-      onRehydrateStorage: () => (state, error) => {
-        // After hydration completes, set _hasHydrated and sync isAuthenticated
-        if (!error) {
-          useAuthStore.setState({
-            _hasHydrated: true,
-            isAuthenticated: !!state?.token
-          })
-        }
-      },
+      // Persist isAuthenticated so we don't need hydration tracking
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated
+      }),
     }
   )
 )
