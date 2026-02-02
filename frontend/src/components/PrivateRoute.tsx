@@ -1,14 +1,14 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth.store'
-import { useHasHydrated } from '@/hooks'
 
 interface PrivateRouteProps {
   children: React.ReactNode
 }
 
 export function PrivateRoute({ children }: PrivateRouteProps) {
+  // Get hydration and auth state directly from store (no separate hook needed)
+  const hasHydrated = useAuthStore((state) => state._hasHydrated)
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const hasHydrated = useHasHydrated()
   const location = useLocation()
 
   // Wait for Zustand to hydrate from localStorage before making auth decisions
