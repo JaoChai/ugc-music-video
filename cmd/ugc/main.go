@@ -111,14 +111,16 @@ func main() {
 
 	// Create worker dependencies
 	workerDeps := worker.Dependencies{
-		JobService:       jobService,
+		JobRepo:          jobRepo,
 		UserRepo:         userRepo,
 		OpenRouterClient: openRouterClient,
 		SunoClient:       sunoClient,
 		NanoBananaClient: nanoBananaClient,
 		R2Client:         r2Client,
 		FFmpegProcessor:  ffmpegProcessor,
+		AsynqClient:      asynqClient,
 		Logger:           logger,
+		WebhookBaseURL:   cfg.Webhook.BaseURL,
 	}
 
 	// Create worker

@@ -16,19 +16,17 @@ import (
 	"github.com/jaochai/ugc/internal/external/r2"
 	"github.com/jaochai/ugc/internal/ffmpeg"
 	"github.com/jaochai/ugc/internal/repository"
-	"github.com/jaochai/ugc/internal/service"
+	"github.com/jaochai/ugc/internal/worker/tasks"
 )
 
-// Task type constants define the types of background jobs.
+// Re-export task type constants for convenience.
 const (
-	TypeAnalyzeConcept  = "job:analyze_concept"
-	TypeGenerateMusic   = "job:generate_music"
-	TypePollMusicStatus = "job:poll_music_status"
-	TypeSelectSong      = "job:select_song"
-	TypeGenerateImage   = "job:generate_image"
-	TypePollImageStatus = "job:poll_image_status"
-	TypeProcessVideo    = "job:process_video"
-	TypeUploadAssets    = "job:upload_assets"
+	TypeAnalyzeConcept  = tasks.TypeAnalyzeConcept
+	TypeGenerateMusic   = tasks.TypeGenerateMusic
+	TypeSelectSong      = tasks.TypeSelectSong
+	TypeGenerateImage   = tasks.TypeGenerateImage
+	TypeProcessVideo    = tasks.TypeProcessVideo
+	TypeUploadAssets    = tasks.TypeUploadAssets
 )
 
 // TaskPayload is a generic payload for all task types.
@@ -36,48 +34,18 @@ type TaskPayload struct {
 	JobID uuid.UUID `json:"job_id"`
 }
 
-// AnalyzeConceptPayload is the payload for the analyze concept task.
-type AnalyzeConceptPayload = TaskPayload
-
-// GenerateMusicPayload is the payload for the generate music task.
-type GenerateMusicPayload = TaskPayload
-
-// PollMusicStatusPayload is the payload for polling music generation status.
-type PollMusicStatusPayload struct {
-	JobID     uuid.UUID `json:"job_id"`
-	TaskID    string    `json:"task_id"`
-	PollCount int       `json:"poll_count"`
-}
-
-// SelectSongPayload is the payload for the select song task.
-type SelectSongPayload = TaskPayload
-
-// GenerateImagePayload is the payload for the generate image task.
-type GenerateImagePayload = TaskPayload
-
-// PollImageStatusPayload is the payload for polling image generation status.
-type PollImageStatusPayload struct {
-	JobID     uuid.UUID `json:"job_id"`
-	TaskID    string    `json:"task_id"`
-	PollCount int       `json:"poll_count"`
-}
-
-// ProcessVideoPayload is the payload for the process video task.
-type ProcessVideoPayload = TaskPayload
-
-// UploadAssetsPayload is the payload for the upload assets task.
-type UploadAssetsPayload = TaskPayload
-
 // Dependencies holds all dependencies needed by task handlers.
 type Dependencies struct {
-	JobService       service.JobService
+	JobRepo          repository.JobRepository
 	UserRepo         repository.UserRepository
 	OpenRouterClient *openrouter.Client
 	SunoClient       *kie.SunoClient
 	NanoBananaClient *kie.NanoBananaClient
 	R2Client         *r2.Client
 	FFmpegProcessor  *ffmpeg.Processor
+	AsynqClient      *asynq.Client
 	Logger           *zap.Logger
+	WebhookBaseURL   string // Base URL for webhooks, empty to use polling
 }
 
 // Worker represents the Asynq worker server.
@@ -127,15 +95,27 @@ func NewWorker(redisURL string, deps Dependencies, logger *zap.Logger) (*Worker,
 	// Create ServeMux and register handlers
 	mux := asynq.NewServeMux()
 
-	// Register task handlers (using constants from tasks.go)
-	mux.HandleFunc(TypeAnalyzeConcept, newAnalyzeConceptHandler(deps))
-	mux.HandleFunc(TypeGenerateMusic, newGenerateMusicHandler(deps))
-	mux.HandleFunc(TypePollMusicStatus, newPollMusicStatusHandler(deps))
-	mux.HandleFunc(TypeSelectSong, newSelectSongHandler(deps))
-	mux.HandleFunc(TypeGenerateImage, newGenerateImageHandler(deps))
-	mux.HandleFunc(TypePollImageStatus, newPollImageStatusHandler(deps))
-	mux.HandleFunc(TypeProcessVideo, newProcessVideoHandler(deps))
-	mux.HandleFunc(TypeUploadAssets, newUploadAssetsHandler(deps))
+	// Convert worker.Dependencies to tasks.Dependencies
+	taskDeps := &tasks.Dependencies{
+		JobRepo:          deps.JobRepo,
+		UserRepo:         deps.UserRepo,
+		OpenRouterClient: deps.OpenRouterClient,
+		SunoClient:       deps.SunoClient,
+		NanoBananaClient: deps.NanoBananaClient,
+		R2Client:         deps.R2Client,
+		FFmpegProcessor:  deps.FFmpegProcessor,
+		AsynqClient:      deps.AsynqClient,
+		Logger:           deps.Logger,
+		WebhookBaseURL:   deps.WebhookBaseURL,
+	}
+
+	// Register task handlers using real implementations from tasks package
+	mux.HandleFunc(tasks.TypeAnalyzeConcept, tasks.HandleAnalyzeConcept(taskDeps))
+	mux.HandleFunc(tasks.TypeGenerateMusic, tasks.HandleGenerateMusic(taskDeps))
+	mux.HandleFunc(tasks.TypeSelectSong, tasks.HandleSelectSong(taskDeps))
+	mux.HandleFunc(tasks.TypeGenerateImage, tasks.HandleGenerateImage(taskDeps))
+	mux.HandleFunc(tasks.TypeProcessVideo, tasks.HandleProcessVideo(taskDeps))
+	mux.HandleFunc(tasks.TypeUploadAssets, tasks.HandleUploadAssets(taskDeps))
 
 	return &Worker{
 		server: server,
@@ -176,180 +156,6 @@ func EnqueueTask(ctx context.Context, client *asynq.Client, taskType string, job
 
 	_ = info // info contains task ID, queue, etc.
 	return nil
-}
-
-// Task handlers
-
-func newAnalyzeConceptHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload AnalyzeConceptPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing analyze concept task",
-			zap.String("job_id", payload.JobID.String()),
-		)
-
-		// TODO: Implement concept analysis logic
-		// 1. Get job from database
-		// 2. Use OpenRouter to analyze the concept
-		// 3. Generate song prompt
-		// 4. Update job with song prompt
-		// 5. Enqueue next task (generate music)
-
-		return nil
-	}
-}
-
-func newGenerateMusicHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload GenerateMusicPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing generate music task",
-			zap.String("job_id", payload.JobID.String()),
-		)
-
-		// TODO: Implement music generation logic
-		// 1. Get job from database
-		// 2. Use Suno client to generate music
-		// 3. Enqueue poll music status task
-
-		return nil
-	}
-}
-
-func newPollMusicStatusHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload PollMusicStatusPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing poll music status task",
-			zap.String("job_id", payload.JobID.String()),
-			zap.String("task_id", payload.TaskID),
-			zap.Int("poll_count", payload.PollCount),
-		)
-
-		// TODO: Implement music status polling logic
-		// 1. Check Suno task status
-		// 2. If completed, update job with generated songs and enqueue select song task
-		// 3. If still processing, re-enqueue poll task with incremented count
-		// 4. If failed or max polls exceeded, mark job as failed
-
-		return nil
-	}
-}
-
-func newSelectSongHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload SelectSongPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing select song task",
-			zap.String("job_id", payload.JobID.String()),
-		)
-
-		// TODO: Implement song selection logic
-		// 1. Get job from database
-		// 2. Use OpenRouter to analyze songs and select best one
-		// 3. Update job with selected song
-		// 4. Enqueue next task (generate image)
-
-		return nil
-	}
-}
-
-func newGenerateImageHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload GenerateImagePayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing generate image task",
-			zap.String("job_id", payload.JobID.String()),
-		)
-
-		// TODO: Implement image generation logic
-		// 1. Get job from database
-		// 2. Use OpenRouter to generate image prompt
-		// 3. Use NanoBanana client to generate image
-		// 4. Enqueue poll image status task
-
-		return nil
-	}
-}
-
-func newPollImageStatusHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload PollImageStatusPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing poll image status task",
-			zap.String("job_id", payload.JobID.String()),
-			zap.String("task_id", payload.TaskID),
-			zap.Int("poll_count", payload.PollCount),
-		)
-
-		// TODO: Implement image status polling logic
-		// 1. Check NanoBanana task status
-		// 2. If completed, update job with image URL and enqueue process video task
-		// 3. If still processing, re-enqueue poll task with incremented count
-		// 4. If failed or max polls exceeded, mark job as failed
-
-		return nil
-	}
-}
-
-func newProcessVideoHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload ProcessVideoPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing video task",
-			zap.String("job_id", payload.JobID.String()),
-		)
-
-		// TODO: Implement video processing logic
-		// 1. Get job from database
-		// 2. Use FFmpeg to combine audio and image into video
-		// 3. Update job with video URL
-		// 4. Enqueue next task (upload assets)
-
-		return nil
-	}
-}
-
-func newUploadAssetsHandler(deps Dependencies) asynq.HandlerFunc {
-	return func(ctx context.Context, task *asynq.Task) error {
-		var payload UploadAssetsPayload
-		if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-			return fmt.Errorf("failed to unmarshal payload: %w", err)
-		}
-
-		deps.Logger.Info("processing upload assets task",
-			zap.String("job_id", payload.JobID.String()),
-		)
-
-		// TODO: Implement asset upload logic
-		// 1. Get job from database
-		// 2. Upload audio, image, and video to R2
-		// 3. Update job with final URLs
-		// 4. Mark job as completed
-
-		return nil
-	}
 }
 
 // asynqLogger adapts zap.Logger to asynq.Logger interface.

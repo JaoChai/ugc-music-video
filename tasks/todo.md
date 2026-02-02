@@ -2,41 +2,6 @@
 
 ## Critical
 
-### [ ] Wire worker handlers to real implementations
-
-**Priority:** Critical
-**Files:** `internal/worker/worker.go`
-
-#### Description
-The `worker.go` file registers task handlers using stub functions (lines 183-353) that only log and return nil. The real implementations exist in `internal/worker/tasks/handlers.go` but are not wired up.
-
-#### Current State
-```go
-// worker.go - STUBS (do nothing)
-mux.HandleFunc(TypeAnalyzeConcept, newAnalyzeConceptHandler(deps))
-
-// tasks/handlers.go - REAL implementations
-func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc { ... }
-```
-
-#### Solution
-Replace worker.go stub registrations with tasks/handlers.go functions:
-```go
-import "github.com/jaochai/ugc/internal/worker/tasks"
-
-// Create tasks.Dependencies
-taskDeps := &tasks.Dependencies{...}
-
-// Register real handlers
-mux.HandleFunc(tasks.TypeAnalyzeConcept, tasks.HandleAnalyzeConcept(taskDeps))
-```
-
-#### Acceptance Criteria
-- [ ] All 8 task types use real handlers from tasks/handlers.go
-- [ ] Dependencies properly passed to handlers
-- [ ] `make test` passes
-- [ ] Manual test: create job, verify it progresses through statuses
-
 ---
 
 ### [ ] Consolidate duplicate job APIs
@@ -145,4 +110,15 @@ Unhandled React errors crash the entire app.
 
 ## Completed
 
-_Move completed tasks here with completion date_
+### [x] Wire worker handlers to real implementations (2026-02-02)
+
+**Files changed:**
+- `internal/worker/worker.go` - Removed stub handlers, wired real handlers from tasks package
+- `cmd/ugc/main.go` - Updated Dependencies to use JobRepo instead of JobService
+
+**Changes:**
+- Removed 170+ lines of stub handler code
+- Added import for `tasks` package
+- Changed `Dependencies.JobService` → `Dependencies.JobRepo`
+- Added `Dependencies.AsynqClient` and `Dependencies.WebhookBaseURL`
+- Registered 6 real handlers: AnalyzeConcept, GenerateMusic, SelectSong, GenerateImage, ProcessVideo, UploadAssets
