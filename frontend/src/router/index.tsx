@@ -10,6 +10,7 @@ const JobList = lazy(() => import('@/features/job/pages/JobListPage'))
 const JobDetail = lazy(() => import('@/features/job/pages/JobDetailPage'))
 const CreateJob = lazy(() => import('@/features/job/pages/CreateJobPage'))
 const Settings = lazy(() => import('@/features/settings/pages/SettingsPage'))
+const NotFound = lazy(() => import('@/pages/NotFoundPage'))
 
 // Loading component
 function PageLoader() {
@@ -70,6 +71,11 @@ const router = createBrowserRouter([
   {
     path: '/settings',
     element: withPrivateRoute(Settings),
+  },
+  // 404 catch-all route
+  {
+    path: '*',
+    element: withSuspense(NotFound),
   },
 ])
 
