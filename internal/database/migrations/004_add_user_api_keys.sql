@@ -1,10 +1,6 @@
--- +migrate Up
--- Add encrypted API key columns to users table
-ALTER TABLE users
-ADD COLUMN openrouter_api_key TEXT,
-ADD COLUMN kie_api_key TEXT;
+-- Migration: 004_add_user_api_keys
+-- Description: Add encrypted API key columns to users table
 
--- +migrate Down
 ALTER TABLE users
-DROP COLUMN IF EXISTS openrouter_api_key,
-DROP COLUMN IF EXISTS kie_api_key;
+ADD COLUMN IF NOT EXISTS openrouter_api_key TEXT,
+ADD COLUMN IF NOT EXISTS kie_api_key TEXT;
