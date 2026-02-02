@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react'
 import { Button, Input } from '@/components/ui'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
 import { useAPIKeysStatus, useUpdateAPIKeysMutation } from '../hooks/useApiKeys'
+import { useTestOpenRouterConnection, useTestKIEConnection } from '../hooks/useSettings'
 
 export function APIKeysSection() {
   const { data: keysStatus, isLoading } = useAPIKeysStatus()
   const { updateAPIKeys, isUpdating, isSuccess, error, reset } = useUpdateAPIKeysMutation()
+  const { testConnection: testOpenRouter, isTesting: isTestingOpenRouter, result: openRouterResult, reset: resetOpenRouter } = useTestOpenRouterConnection()
+  const { testConnection: testKIE, isTesting: isTestingKIE, result: kieResult, reset: resetKIE } = useTestKIEConnection()
 
   const [openRouterKey, setOpenRouterKey] = useState('')
   const [kieKey, setKieKey] = useState('')
@@ -23,6 +26,37 @@ export function APIKeysSection() {
       return () => clearTimeout(timer)
     }
   }, [isSuccess, reset])
+
+  // Reset test results after 5 seconds
+  useEffect(() => {
+    if (openRouterResult) {
+      const timer = setTimeout(() => resetOpenRouter(), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [openRouterResult, resetOpenRouter])
+
+  useEffect(() => {
+    if (kieResult) {
+      const timer = setTimeout(() => resetKIE(), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [kieResult, resetKIE])
+
+  const handleTestOpenRouter = async () => {
+    try {
+      await testOpenRouter()
+    } catch {
+      // Error handled by hook
+    }
+  }
+
+  const handleTestKIE = async () => {
+    try {
+      await testKIE()
+    } catch {
+      // Error handled by hook
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,17 +163,36 @@ export function APIKeysSection() {
                 )}
               </button>
             </div>
-            <p className="text-sm text-gray-500">
-              ใช้สำหรับ LLM (วิเคราะห์คอนเซ็ปต์, สร้างเนื้อเพลง, เลือกเพลง) -{' '}
-              <a
-                href="https://openrouter.ai/keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                รับ API Key
-              </a>
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-gray-500 flex-1">
+                ใช้สำหรับ LLM (วิเคราะห์คอนเซ็ปต์, สร้างเนื้อเพลง, เลือกเพลง) -{' '}
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  รับ API Key
+                </a>
+              </p>
+              {keysStatus?.has_openrouter_key && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestOpenRouter}
+                  disabled={isTestingOpenRouter}
+                  className="shrink-0"
+                >
+                  {isTestingOpenRouter ? 'กำลังทดสอบ...' : 'ทดสอบการเชื่อมต่อ'}
+                </Button>
+              )}
+            </div>
+            {openRouterResult && (
+              <div className={`text-sm px-3 py-2 rounded ${openRouterResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {openRouterResult.success ? '✓ ' : '✗ '}{openRouterResult.message}
+              </div>
+            )}
           </div>
 
           {/* KIE API Key */}
@@ -190,17 +243,36 @@ export function APIKeysSection() {
                 )}
               </button>
             </div>
-            <p className="text-sm text-gray-500">
-              ใช้สำหรับสร้างเพลง (Suno) และรูปภาพ (NanoBanana) -{' '}
-              <a
-                href="https://kie.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                รับ API Key
-              </a>
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-gray-500 flex-1">
+                ใช้สำหรับสร้างเพลง (Suno) และรูปภาพ (NanoBanana) -{' '}
+                <a
+                  href="https://kie.ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  รับ API Key
+                </a>
+              </p>
+              {keysStatus?.has_kie_key && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestKIE}
+                  disabled={isTestingKIE}
+                  className="shrink-0"
+                >
+                  {isTestingKIE ? 'กำลังทดสอบ...' : 'ทดสอบการเชื่อมต่อ'}
+                </Button>
+              )}
+            </div>
+            {kieResult && (
+              <div className={`text-sm px-3 py-2 rounded ${kieResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {kieResult.success ? '✓ ' : '✗ '}{kieResult.message}
+              </div>
+            )}
           </div>
 
           {/* Save Button */}

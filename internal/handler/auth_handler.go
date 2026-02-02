@@ -2,8 +2,14 @@
 package handler
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -14,6 +20,15 @@ import (
 	"github.com/jaochai/ugc/internal/service"
 	"github.com/jaochai/ugc/pkg/response"
 )
+
+// maxResponseBodySize limits the size of external API response bodies to prevent memory exhaustion
+const maxResponseBodySize = 1024 // 1KB
+
+// maxNameLength is the maximum allowed length for user names
+const maxNameLength = 100
+
+// maxModelLength is the maximum allowed length for model names
+const maxModelLength = 100
 
 // LoginResponse represents the response for successful login
 type LoginResponse struct {
@@ -62,9 +77,12 @@ func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup) {
 		protected.Use(middleware.AuthMiddleware(h.authService, h.logger))
 		{
 			protected.GET("/me", h.Me)
+			protected.PATCH("/profile", h.UpdateProfile)
 			protected.GET("/api-keys", h.GetAPIKeysStatus)
 			protected.PUT("/api-keys", h.UpdateAPIKeys)
 			protected.DELETE("/api-keys", h.DeleteAPIKeys)
+			protected.POST("/test-openrouter", h.TestOpenRouterConnection)
+			protected.POST("/test-kie", h.TestKIEConnection)
 		}
 	}
 }
@@ -439,4 +457,262 @@ func (h *AuthHandler) DeleteAPIKeys(c *gin.Context) {
 
 	h.logger.Info("API keys deleted", zap.String("user_id", userID.String()))
 	response.NoContent(c)
+}
+
+// UpdateProfile updates the user's profile (name, openrouter_model)
+// @Summary Update user profile
+// @Description Updates the user's profile settings
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param input body models.UpdateUserInput true "Profile data to update"
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=models.UserResponse}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/profile [patch]
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	var input models.UpdateUserInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, "invalid request body")
+		return
+	}
+
+	// Validate input
+	if input.Name != nil && len(*input.Name) > maxNameLength {
+		response.BadRequest(c, "name must be 100 characters or less")
+		return
+	}
+	if input.OpenRouterModel != nil && len(*input.OpenRouterModel) > maxModelLength {
+		response.BadRequest(c, "model name must be 100 characters or less")
+		return
+	}
+
+	// Get current user
+	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get user", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	// Update fields if provided
+	if input.Name != nil {
+		user.Name = input.Name
+	}
+	if input.OpenRouterModel != nil {
+		user.OpenRouterModel = *input.OpenRouterModel
+	}
+
+	// Save to database
+	if err := h.userRepo.Update(c.Request.Context(), user); err != nil {
+		h.logger.Error("failed to update user profile", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("user profile updated", zap.String("user_id", userID.String()))
+	response.Success(c, user.ToResponse())
+}
+
+// TestConnectionResponse represents the response for API connection tests
+type TestConnectionResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// TestOpenRouterConnection tests the OpenRouter API connection with user's API key
+// @Summary Test OpenRouter API connection
+// @Description Tests connectivity to OpenRouter API using the user's saved API key
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=TestConnectionResponse}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/test-openrouter [post]
+func (h *AuthHandler) TestOpenRouterConnection(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	// Get user's API key
+	openRouterKey, _, err := h.userRepo.GetAPIKeys(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get API keys", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	if openRouterKey == nil || *openRouterKey == "" {
+		response.BadRequest(c, "OpenRouter API key not configured")
+		return
+	}
+
+	// Decrypt the API key
+	decryptedKey, err := h.cryptoService.Decrypt(*openRouterKey)
+	if err != nil {
+		h.logger.Error("failed to decrypt OpenRouter API key", zap.Error(err))
+		response.Error(c, errors.New("failed to decrypt API key"))
+		return
+	}
+
+	// Test the connection by making a simple request to OpenRouter
+	success, message := testOpenRouterAPI(c.Request.Context(), decryptedKey, h.logger)
+
+	h.logger.Info("OpenRouter connection test",
+		zap.String("user_id", userID.String()),
+		zap.Bool("success", success),
+	)
+
+	response.Success(c, TestConnectionResponse{
+		Success: success,
+		Message: message,
+	})
+}
+
+// TestKIEConnection tests the KIE API connection with user's API key
+// @Summary Test KIE API connection
+// @Description Tests connectivity to KIE API using the user's saved API key
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Response{data=TestConnectionResponse}
+// @Failure 400 {object} response.Response
+// @Failure 401 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /auth/test-kie [post]
+func (h *AuthHandler) TestKIEConnection(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	// Get user's API key
+	_, kieKey, err := h.userRepo.GetAPIKeys(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get API keys", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, err)
+		return
+	}
+
+	if kieKey == nil || *kieKey == "" {
+		response.BadRequest(c, "KIE API key not configured")
+		return
+	}
+
+	// Decrypt the API key
+	decryptedKey, err := h.cryptoService.Decrypt(*kieKey)
+	if err != nil {
+		h.logger.Error("failed to decrypt KIE API key", zap.Error(err))
+		response.Error(c, errors.New("failed to decrypt API key"))
+		return
+	}
+
+	// Test the connection by making a simple request to KIE
+	success, message := testKIEAPI(c.Request.Context(), decryptedKey, h.logger)
+
+	h.logger.Info("KIE connection test",
+		zap.String("user_id", userID.String()),
+		zap.Bool("success", success),
+	)
+
+	response.Success(c, TestConnectionResponse{
+		Success: success,
+		Message: message,
+	})
+}
+
+// testOpenRouterAPI tests the OpenRouter API connection
+func testOpenRouterAPI(ctx context.Context, apiKey string, logger *zap.Logger) (bool, string) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// Make a simple request to list models (lightweight endpoint)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://openrouter.ai/api/v1/models", nil)
+	if err != nil {
+		logger.Error("failed to create OpenRouter request", zap.Error(err))
+		return false, "Failed to create request"
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("OpenRouter connection failed", zap.Error(err))
+		return false, "Connection failed. Please check your network and try again."
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return false, "Invalid API key"
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
+		logger.Error("OpenRouter API error",
+			zap.Int("status_code", resp.StatusCode),
+			zap.String("body", string(body)))
+		return false, "API returned an error. Please try again later."
+	}
+
+	return true, "Connection successful"
+}
+
+// testKIEAPI tests the KIE API connection
+func testKIEAPI(ctx context.Context, apiKey string, logger *zap.Logger) (bool, string) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// Make a simple request to check credits/account status
+	// Using the Suno API endpoint for credits check
+	reqBody := map[string]interface{}{
+		"action": "credits",
+	}
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		logger.Error("failed to marshal KIE request body", zap.Error(err))
+		return false, "Failed to create request"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.kie.ai/api/v1/suno", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		logger.Error("failed to create KIE request", zap.Error(err))
+		return false, "Failed to create request"
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("KIE connection failed", zap.Error(err))
+		return false, "Connection failed. Please check your network and try again."
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return false, "Invalid API key"
+	}
+
+	// KIE may return different status codes, check for success range
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return true, "Connection successful"
+	}
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodySize))
+	logger.Error("KIE API error",
+		zap.Int("status_code", resp.StatusCode),
+		zap.String("body", string(body)))
+	return false, "API returned an error. Please try again later."
 }

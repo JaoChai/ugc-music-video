@@ -6,23 +6,15 @@ export interface UpdateProfileInput {
   openrouter_model?: string
 }
 
+export interface TestConnectionResponse {
+  success: boolean
+  message: string
+}
+
 export const settingsApi = {
   updateProfile: async (data: UpdateProfileInput): Promise<User> => {
-    // Get current user ID from auth storage
-    const authStorage = localStorage.getItem('auth-storage')
-    if (!authStorage) {
-      throw new Error('Not authenticated')
-    }
-
-    const { state } = JSON.parse(authStorage)
-    const userId = state?.user?.id
-
-    if (!userId) {
-      throw new Error('User ID not found')
-    }
-
-    const response = await api.patch(`/api/collections/users/records/${userId}`, data)
-    return response.data
+    const response = await api.patch<{ data: User }>('/api/v1/auth/profile', data)
+    return response.data.data
   },
 
   getAPIKeysStatus: async (): Promise<APIKeysStatus> => {
@@ -37,5 +29,15 @@ export const settingsApi = {
 
   deleteAPIKeys: async (): Promise<void> => {
     await api.delete('/api/v1/auth/api-keys')
+  },
+
+  testOpenRouterConnection: async (): Promise<TestConnectionResponse> => {
+    const response = await api.post<{ data: TestConnectionResponse }>('/api/v1/auth/test-openrouter')
+    return response.data.data
+  },
+
+  testKIEConnection: async (): Promise<TestConnectionResponse> => {
+    const response = await api.post<{ data: TestConnectionResponse }>('/api/v1/auth/test-kie')
+    return response.data.data
   },
 }
