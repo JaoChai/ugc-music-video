@@ -3,10 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth.store'
 import { authApi, type LoginRequest, type RegisterRequest } from '../api/auth.api'
 import type { AxiosError } from 'axios'
+import type { ApiError } from '@/types'
 
 interface ApiErrorResponse {
-  message?: string
-  data?: Record<string, { message: string }>
+  success: boolean
+  error?: ApiError
 }
 
 interface LocationState {
@@ -72,20 +73,23 @@ export function useAuth() {
 
     const axiosError = error as AxiosError<ApiErrorResponse>
 
-    if (axiosError.response?.data?.message) {
-      return axiosError.response.data.message
+    // Priority 1: API error response { error: { message } }
+    if (axiosError.response?.data?.error?.message) {
+      return axiosError.response.data.error.message
     }
 
-    if (axiosError.response?.data?.data) {
-      const fieldErrors = axiosError.response.data.data
+    // Priority 2: Field validation errors { error: { details: { field: message } } }
+    if (axiosError.response?.data?.error?.details) {
+      const fieldErrors = axiosError.response.data.error.details
       const firstError = Object.values(fieldErrors)[0]
-      if (firstError?.message) {
-        return firstError.message
+      if (firstError) {
+        return firstError
       }
     }
 
+    // Fallback: HTTP status codes
     if (axiosError.response?.status === 400) {
-      return 'Invalid email or password'
+      return 'Invalid request'
     }
 
     if (axiosError.response?.status === 401) {
