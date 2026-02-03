@@ -85,7 +85,7 @@ type SongData struct {
 	Prompt         string  `json:"prompt,omitempty"`
 	Tags           string  `json:"tags,omitempty"`
 	Duration       float64 `json:"duration"`
-	CreateTime     string  `json:"createTime,omitempty"`
+	CreateTime     int64   `json:"createTime,omitempty"`
 }
 
 // NewSunoClient creates a new SunoClient with the given API key and base URL

@@ -35,7 +35,7 @@ type SunoWebhookPayload struct {
 			Prompt         string  `json:"prompt,omitempty"`
 			Tags           string  `json:"tags,omitempty"`
 			Duration       float64 `json:"duration"`
-			CreateTime     string  `json:"createTime,omitempty"`
+			CreateTime     int64   `json:"createTime,omitempty"`
 		} `json:"data"`
 		ErrorMessage string `json:"errorMessage,omitempty"`
 	} `json:"data"`
