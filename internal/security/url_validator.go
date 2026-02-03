@@ -52,6 +52,7 @@ var DefaultAllowedHosts = []string{
 	"kie.ai",
 	"cdn.kie.ai",
 	"storage.kie.ai",
+	"musicfile.kie.ai",
 	// AWS CDN (commonly used by Suno)
 	"amazonaws.com",
 	"cloudfront.net",
