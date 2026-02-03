@@ -163,6 +163,8 @@ func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc {
 
 		// Update job with song_prompt
 		job.SongPrompt = output.ToSongPrompt()
+		// Force model to V5 regardless of LLM output
+		job.SongPrompt.Model = "V5"
 		job.LLMModel = llmModel
 		if err := deps.JobRepo.Update(ctx, job); err != nil {
 			logger.Error("failed to update job with song prompt", zap.Error(err))
