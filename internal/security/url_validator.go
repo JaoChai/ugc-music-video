@@ -42,14 +42,22 @@ func NewURLValidator(allowedHosts []string) *URLValidator {
 
 // DefaultAllowedHosts contains the default list of allowed hosts for media URLs.
 var DefaultAllowedHosts = []string{
-	// Suno CDN
+	// Suno - allow all subdomains
+	"suno.ai",
+	"suno.com",
+	"audiopipe.suno.ai",
 	"cdn1.suno.ai",
 	"cdn2.suno.ai",
-	// KIE CDN
+	// KIE - allow all subdomains
+	"kie.ai",
 	"cdn.kie.ai",
 	"storage.kie.ai",
-	// Common CDN providers (add as needed)
-	"cdn.suno.com",
+	// AWS CDN (commonly used by Suno)
+	"amazonaws.com",
+	"cloudfront.net",
+	"s3.amazonaws.com",
+	// NanoBanana image hosts
+	"nanobananastorage.blob.core.windows.net",
 }
 
 // ValidateURL validates that a URL is safe to fetch.
