@@ -44,14 +44,8 @@ type Dependencies struct {
 // DefaultLLMModel is the default model to use if user hasn't configured one.
 const DefaultLLMModel = "anthropic/claude-3.5-sonnet"
 
-// getEffectivePrompt returns the user's custom prompt if set, otherwise returns the system default from DB.
-func getEffectivePrompt(ctx context.Context, deps *Dependencies, userPrompt *string, promptType string) *string {
-	// If user has a custom prompt, use it
-	if userPrompt != nil && *userPrompt != "" {
-		return userPrompt
-	}
-
-	// Otherwise, get system default from DB
+// getEffectivePrompt returns the system default prompt from DB.
+func getEffectivePrompt(ctx context.Context, deps *Dependencies, promptType string) *string {
 	systemPrompt, err := deps.SystemPromptRepo.GetByType(ctx, promptType)
 	if err != nil {
 		deps.Logger.Warn("failed to get system prompt from DB, using hardcoded default",
@@ -148,11 +142,8 @@ func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc {
 			llmModel = DefaultLLMModel
 		}
 
-		// Get user's custom prompts
-		userSongConceptPrompt, _, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
-
-		// Get effective prompt (user custom or system default from DB)
-		effectivePrompt := getEffectivePrompt(ctx, deps, userSongConceptPrompt, "song_concept")
+		// Get effective prompt from system defaults
+		effectivePrompt := getEffectivePrompt(ctx, deps, "song_concept")
 
 		// Create per-user OpenRouter client and SongConceptAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
@@ -381,11 +372,8 @@ func HandleSelectSong(deps *Dependencies) asynq.HandlerFunc {
 			llmModel = DefaultLLMModel
 		}
 
-		// Get user's custom prompts
-		_, userSongSelectorPrompt, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
-
-		// Get effective prompt (user custom or system default from DB)
-		effectivePrompt := getEffectivePrompt(ctx, deps, userSongSelectorPrompt, "song_selector")
+		// Get effective prompt from system defaults
+		effectivePrompt := getEffectivePrompt(ctx, deps, "song_selector")
 
 		// Create per-user OpenRouter client and SongSelectorAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
@@ -512,11 +500,8 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 			llmModel = DefaultLLMModel
 		}
 
-		// Get user's custom prompts
-		_, _, userImageConceptPrompt, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
-
-		// Get effective prompt (user custom or system default from DB)
-		effectivePrompt := getEffectivePrompt(ctx, deps, userImageConceptPrompt, "image_concept")
+		// Get effective prompt from system defaults
+		effectivePrompt := getEffectivePrompt(ctx, deps, "image_concept")
 
 		// Create per-user OpenRouter client and ImageConceptAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)

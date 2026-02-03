@@ -7,7 +7,6 @@ import { DashboardLayout } from '@/features/dashboard/components/DashboardLayout
 import { useAuthStore } from '@/stores/auth.store'
 import { useUpdateProfileMutation } from '../hooks/useSettings'
 import { APIKeysSection } from '../components/APIKeysSection'
-import { AgentPromptsSection } from '../components/AgentPromptsSection'
 import { SystemDefaultsSection } from '../components/SystemDefaultsSection'
 import type { UpdateProfileInput } from '../api/settings.api'
 
@@ -18,7 +17,7 @@ interface SettingsFormData {
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { user, isAuthenticated, isAdmin } = useAuthStore()
+  const { user, isAuthenticated } = useAuthStore()
   const { updateProfile, isUpdating, isSuccess, error, reset } = useUpdateProfileMutation()
 
   const {
@@ -172,17 +171,10 @@ export default function SettingsPage() {
           <APIKeysSection />
         </div>
 
-        {/* Agent Prompts Section */}
+        {/* System Defaults Section */}
         <div className="mt-6">
-          <AgentPromptsSection />
+          <SystemDefaultsSection />
         </div>
-
-        {/* Admin-only System Defaults Section */}
-        {isAdmin() && (
-          <div className="mt-6">
-            <SystemDefaultsSection />
-          </div>
-        )}
       </div>
     </DashboardLayout>
   )

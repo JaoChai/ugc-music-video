@@ -163,10 +163,10 @@ export function SystemDefaultsSection() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-amber-500" />
-          <CardTitle>System Defaults (Admin)</CardTitle>
+          <CardTitle>AI Prompts</CardTitle>
         </div>
         <CardDescription>
-          แก้ไข Default AI Prompts สำหรับผู้ใช้ทั้งหมด การเปลี่ยนแปลงจะมีผลกับทุกคน
+          กำหนด system prompt ของ AI agent แต่ละตัวเพื่อปรับแต่งผลลัพธ์ตามที่ต้องการ
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
