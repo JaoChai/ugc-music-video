@@ -128,19 +128,10 @@ func (a *SongConceptAgent) validateOutput(output *SongConceptOutput) error {
 	if output.Title == "" {
 		return fmt.Errorf("title is required")
 	}
-	if output.Model == "" {
-		return fmt.Errorf("model is required")
-	}
 
-	// Validate model value
-	validModels := map[string]bool{
-		"V4":   true,
-		"V4_5": true,
-		"V5":   true,
-	}
-	if !validModels[output.Model] {
-		return fmt.Errorf("invalid model: %s (must be V4, V4_5, or V5)", output.Model)
-	}
+	// Force model to V5 regardless of LLM output
+	// LLM may output invalid models like V3.5 which cause API 422 errors
+	output.Model = "V5"
 
 	return nil
 }
