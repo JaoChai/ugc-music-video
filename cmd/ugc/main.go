@@ -135,16 +135,17 @@ func main() {
 
 	// Create worker dependencies
 	workerDeps := worker.Dependencies{
-		JobRepo:         jobRepo,
-		UserRepo:        userRepo,
-		CryptoService:   cryptoService,
-		R2Client:        r2Client,
-		FFmpegProcessor: ffmpegProcessor,
-		AsynqClient:     asynqClient,
-		Logger:          logger,
-		WebhookBaseURL:  cfg.Webhook.BaseURL,
-		WebhookSecret:   cfg.Webhook.Secret,
-		KIEBaseURL:      cfg.KIE.BaseURL,
+		JobRepo:          jobRepo,
+		UserRepo:         userRepo,
+		SystemPromptRepo: systemPromptRepo,
+		CryptoService:    cryptoService,
+		R2Client:         r2Client,
+		FFmpegProcessor:  ffmpegProcessor,
+		AsynqClient:      asynqClient,
+		Logger:           logger,
+		WebhookBaseURL:   cfg.Webhook.BaseURL,
+		WebhookSecret:    cfg.Webhook.Secret,
+		KIEBaseURL:       cfg.KIE.BaseURL,
 	}
 
 	// Create worker

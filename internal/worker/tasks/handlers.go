@@ -30,6 +30,7 @@ type CryptoService interface {
 type Dependencies struct {
 	JobRepo          repository.JobRepository
 	UserRepo         repository.UserRepository
+	SystemPromptRepo repository.SystemPromptRepository
 	CryptoService    CryptoService
 	R2Client         *r2.Client
 	FFmpegProcessor  *ffmpeg.Processor
@@ -42,6 +43,26 @@ type Dependencies struct {
 
 // DefaultLLMModel is the default model to use if user hasn't configured one.
 const DefaultLLMModel = "anthropic/claude-3.5-sonnet"
+
+// getEffectivePrompt returns the user's custom prompt if set, otherwise returns the system default from DB.
+func getEffectivePrompt(ctx context.Context, deps *Dependencies, userPrompt *string, promptType string) *string {
+	// If user has a custom prompt, use it
+	if userPrompt != nil && *userPrompt != "" {
+		return userPrompt
+	}
+
+	// Otherwise, get system default from DB
+	systemPrompt, err := deps.SystemPromptRepo.GetByType(ctx, promptType)
+	if err != nil {
+		deps.Logger.Warn("failed to get system prompt from DB, using hardcoded default",
+			zap.String("prompt_type", promptType),
+			zap.Error(err),
+		)
+		return nil // Will fallback to hardcoded default in agent
+	}
+
+	return &systemPrompt.PromptContent
+}
 
 // getUserAPIKeys retrieves and decrypts the user's API keys.
 func getUserAPIKeys(ctx context.Context, deps *Dependencies, userID uuid.UUID) (openRouterKey, kieKey string, err error) {
@@ -128,11 +149,14 @@ func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Get user's custom prompts
-		songConceptPrompt, _, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+		userSongConceptPrompt, _, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+
+		// Get effective prompt (user custom or system default from DB)
+		effectivePrompt := getEffectivePrompt(ctx, deps, userSongConceptPrompt, "song_concept")
 
 		// Create per-user OpenRouter client and SongConceptAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
-		agent := agents.NewSongConceptAgentWithPrompt(openRouterClient, llmModel, logger, songConceptPrompt)
+		agent := agents.NewSongConceptAgentWithPrompt(openRouterClient, llmModel, logger, effectivePrompt)
 
 		// Analyze concept
 		input := agents.SongConceptInput{
@@ -358,11 +382,14 @@ func HandleSelectSong(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Get user's custom prompts
-		_, songSelectorPrompt, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+		_, userSongSelectorPrompt, _, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+
+		// Get effective prompt (user custom or system default from DB)
+		effectivePrompt := getEffectivePrompt(ctx, deps, userSongSelectorPrompt, "song_selector")
 
 		// Create per-user OpenRouter client and SongSelectorAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
-		agent := agents.NewSongSelectorAgentWithPrompt(openRouterClient, llmModel, logger, songSelectorPrompt)
+		agent := agents.NewSongSelectorAgentWithPrompt(openRouterClient, llmModel, logger, effectivePrompt)
 
 		// Build song candidates
 		candidates := make([]agents.SongCandidate, len(job.GeneratedSongs))
@@ -486,11 +513,14 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Get user's custom prompts
-		_, _, imageConceptPrompt, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+		_, _, userImageConceptPrompt, _ := deps.UserRepo.GetPrompts(ctx, job.UserID)
+
+		// Get effective prompt (user custom or system default from DB)
+		effectivePrompt := getEffectivePrompt(ctx, deps, userImageConceptPrompt, "image_concept")
 
 		// Create per-user OpenRouter client and ImageConceptAgent
 		openRouterClient := openrouter.NewClient(openRouterKey)
-		agent := agents.NewImageConceptAgentWithPrompt(openRouterClient, llmModel, logger, imageConceptPrompt)
+		agent := agents.NewImageConceptAgentWithPrompt(openRouterClient, llmModel, logger, effectivePrompt)
 
 		// Build input
 		var songTitle, songStyle, lyrics string

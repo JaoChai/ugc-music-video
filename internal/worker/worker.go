@@ -35,16 +35,17 @@ type TaskPayload struct {
 
 // Dependencies holds all dependencies needed by task handlers.
 type Dependencies struct {
-	JobRepo         repository.JobRepository
-	UserRepo        repository.UserRepository
-	CryptoService   service.CryptoService
-	R2Client        *r2.Client
-	FFmpegProcessor *ffmpeg.Processor
-	AsynqClient     *asynq.Client
-	Logger          *zap.Logger
-	WebhookBaseURL  string // Base URL for webhooks, empty to use polling
-	WebhookSecret   string // Secret token for webhook authentication
-	KIEBaseURL      string // Base URL for KIE API
+	JobRepo          repository.JobRepository
+	UserRepo         repository.UserRepository
+	SystemPromptRepo repository.SystemPromptRepository
+	CryptoService    service.CryptoService
+	R2Client         *r2.Client
+	FFmpegProcessor  *ffmpeg.Processor
+	AsynqClient      *asynq.Client
+	Logger           *zap.Logger
+	WebhookBaseURL   string // Base URL for webhooks, empty to use polling
+	WebhookSecret    string // Secret token for webhook authentication
+	KIEBaseURL       string // Base URL for KIE API
 }
 
 // Worker represents the Asynq worker server.
@@ -96,16 +97,17 @@ func NewWorker(redisURL string, deps Dependencies, logger *zap.Logger) (*Worker,
 
 	// Convert worker.Dependencies to tasks.Dependencies
 	taskDeps := &tasks.Dependencies{
-		JobRepo:         deps.JobRepo,
-		UserRepo:        deps.UserRepo,
-		CryptoService:   deps.CryptoService,
-		R2Client:        deps.R2Client,
-		FFmpegProcessor: deps.FFmpegProcessor,
-		AsynqClient:     deps.AsynqClient,
-		Logger:          deps.Logger,
-		WebhookBaseURL:  deps.WebhookBaseURL,
-		WebhookSecret:   deps.WebhookSecret,
-		KIEBaseURL:      deps.KIEBaseURL,
+		JobRepo:          deps.JobRepo,
+		UserRepo:         deps.UserRepo,
+		SystemPromptRepo: deps.SystemPromptRepo,
+		CryptoService:    deps.CryptoService,
+		R2Client:         deps.R2Client,
+		FFmpegProcessor:  deps.FFmpegProcessor,
+		AsynqClient:      deps.AsynqClient,
+		Logger:           deps.Logger,
+		WebhookBaseURL:   deps.WebhookBaseURL,
+		WebhookSecret:    deps.WebhookSecret,
+		KIEBaseURL:       deps.KIEBaseURL,
 	}
 
 	// Register task handlers using real implementations from tasks package
