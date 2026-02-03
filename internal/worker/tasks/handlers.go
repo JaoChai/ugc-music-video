@@ -162,9 +162,8 @@ func HandleAnalyzeConcept(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Update job with song_prompt
+		// Note: Model is hardcoded to "V5" in ToSongPrompt()
 		job.SongPrompt = output.ToSongPrompt()
-		// Force model to V5 regardless of LLM output
-		job.SongPrompt.Model = "V5"
 		job.LLMModel = llmModel
 		if err := deps.JobRepo.Update(ctx, job); err != nil {
 			logger.Error("failed to update job with song prompt", zap.Error(err))
@@ -532,10 +531,13 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Update job with image_prompt
+		// AspectRatio and Resolution are hardcoded - LLM doesn't have knowledge about API constraints
+		const defaultAspectRatio = "16:9"
+		const defaultResolution = "1K"
 		job.ImagePrompt = &models.ImagePrompt{
 			Prompt:      output.Prompt,
-			AspectRatio: output.AspectRatio,
-			Resolution:  output.Resolution,
+			AspectRatio: defaultAspectRatio,
+			Resolution:  defaultResolution,
 		}
 		if err := deps.JobRepo.Update(ctx, job); err != nil {
 			logger.Error("failed to update job with image prompt", zap.Error(err))
@@ -552,8 +554,8 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 			Model: kie.ModelNanoBananaPro,
 			Input: kie.NanoInput{
 				Prompt:       output.Prompt,
-				AspectRatio:  output.AspectRatio,
-				Resolution:   output.Resolution,
+				AspectRatio:  defaultAspectRatio,
+				Resolution:   defaultResolution,
 				OutputFormat: kie.FormatPNG,
 			},
 		}

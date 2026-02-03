@@ -26,11 +26,10 @@ type ImageConceptInput struct {
 }
 
 // ImageConceptOutput contains the generated image prompt data.
-// This matches models.ImagePrompt structure.
+// Note: AspectRatio and Resolution are NOT included - these are API-specific values
+// that should be configured in the application, not by the LLM.
 type ImageConceptOutput struct {
-	Prompt      string `json:"prompt"`
-	AspectRatio string `json:"aspectRatio"`
-	Resolution  string `json:"resolution"`
+	Prompt string `json:"prompt"`
 }
 
 // NewImageConceptAgent creates a new ImageConceptAgent.
@@ -78,14 +77,6 @@ func (a *ImageConceptAgent) Generate(ctx context.Context, input ImageConceptInpu
 	// Validate prompt is not empty
 	if output.Prompt == "" {
 		return nil, fmt.Errorf("empty prompt in response")
-	}
-
-	// Set defaults if not provided
-	if output.AspectRatio == "" {
-		output.AspectRatio = "16:9"
-	}
-	if output.Resolution == "" {
-		output.Resolution = "1K"
 	}
 
 	a.Logger().Info("image concept generated successfully",

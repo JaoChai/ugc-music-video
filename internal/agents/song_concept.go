@@ -17,22 +17,23 @@ type SongConceptInput struct {
 }
 
 // SongConceptOutput represents the output from song concept analysis.
-// This matches models.SongPrompt for consistency.
+// Note: Model is NOT included - LLM doesn't have knowledge about Suno API versions.
+// Model is hardcoded to "V5" in ToSongPrompt().
 type SongConceptOutput struct {
 	Prompt       string `json:"prompt"`       // Lyrics/description for Suno
 	Style        string `json:"style"`        // Music style (e.g., "pop ballad", "rock", "EDM")
 	Title        string `json:"title"`        // Song title
-	Model        string `json:"model"`        // Suno model: V4, V4_5, V5
 	Instrumental bool   `json:"instrumental"` // Whether the song should be instrumental
 }
 
 // ToSongPrompt converts SongConceptOutput to models.SongPrompt.
+// Model is hardcoded to "V5" - LLM doesn't have knowledge about Suno API versions.
 func (o *SongConceptOutput) ToSongPrompt() *models.SongPrompt {
 	return &models.SongPrompt{
 		Prompt:       o.Prompt,
 		Style:        o.Style,
 		Title:        o.Title,
-		Model:        o.Model,
+		Model:        "V5", // Hardcoded - LLM cannot reliably select Suno model versions
 		Instrumental: o.Instrumental,
 	}
 }
@@ -107,7 +108,6 @@ func (a *SongConceptAgent) Analyze(ctx context.Context, input SongConceptInput) 
 	a.Logger().Info("song concept analysis complete",
 		zap.String("title", output.Title),
 		zap.String("style", output.Style),
-		zap.String("model", output.Model),
 		zap.Bool("instrumental", output.Instrumental),
 	)
 
@@ -128,10 +128,5 @@ func (a *SongConceptAgent) validateOutput(output *SongConceptOutput) error {
 	if output.Title == "" {
 		return fmt.Errorf("title is required")
 	}
-
-	// Force model to V5 regardless of LLM output
-	// LLM may output invalid models like V3.5 which cause API 422 errors
-	output.Model = "V5"
-
 	return nil
 }
