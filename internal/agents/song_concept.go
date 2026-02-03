@@ -119,8 +119,9 @@ func (a *SongConceptAgent) validateOutput(output *SongConceptOutput) error {
 	if output.Prompt == "" {
 		return fmt.Errorf("prompt is required")
 	}
-	if len(output.Prompt) > 3000 {
-		return fmt.Errorf("prompt exceeds 3000 character limit")
+	// Suno V5 supports up to 5000 characters for prompt
+	if len(output.Prompt) > 5000 {
+		return fmt.Errorf("prompt exceeds 5000 character limit")
 	}
 	if output.Style == "" {
 		return fmt.Errorf("style is required")
