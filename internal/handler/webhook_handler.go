@@ -238,6 +238,7 @@ func (h *WebhookHandler) SunoCallback(c *gin.Context) {
 				h.logger.Warn("skipping song with invalid audio_url",
 					zap.String("job_id", job.ID.String()),
 					zap.String("song_id", s.ID),
+					zap.String("audio_url", s.AudioURL),
 					zap.Error(err),
 				)
 				continue
@@ -253,6 +254,17 @@ func (h *WebhookHandler) SunoCallback(c *gin.Context) {
 
 		// Check if any valid songs remain
 		if len(songs) == 0 {
+			// For "first" callback, don't fail immediately - wait for "complete" callback
+			// which may have fully generated audio URLs
+			if payload.Data.CallbackType == "first" {
+				h.logger.Warn("first callback has no valid songs yet, waiting for complete callback",
+					zap.String("job_id", job.ID.String()),
+					zap.Int("total_songs", len(payload.Data.Data)),
+				)
+				c.JSON(http.StatusOK, gin.H{"message": "acknowledged"})
+				return
+			}
+			// For "complete" callback, fail the job
 			h.logger.Error("all songs have invalid audio URLs",
 				zap.String("job_id", job.ID.String()),
 				zap.Int("total_songs", len(payload.Data.Data)),
