@@ -5,6 +5,7 @@ export interface User {
   email: string
   name: string | null
   avatar?: string
+  role: 'user' | 'admin'
   openrouter_model?: string
   created_at: string
   updated_at: string
@@ -71,4 +72,25 @@ export interface AgentPromptsResponse {
 export interface UpdateAgentPromptInput {
   agent_type: AgentType
   prompt: string | null
+}
+
+// System Prompts Types (Admin)
+export interface SystemPrompt {
+  id: string
+  prompt_type: AgentType
+  prompt_content: string
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SystemPromptsResponse {
+  song_concept: SystemPrompt
+  song_selector: SystemPrompt
+  image_concept: SystemPrompt
+}
+
+export interface UpdateSystemPromptInput {
+  prompt_type: AgentType
+  prompt_content: string
 }

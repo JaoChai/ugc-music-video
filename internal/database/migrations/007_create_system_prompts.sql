@@ -1,9 +1,28 @@
-// Package agents provides AI agents for content generation tasks.
-package agents
+-- Migration: 007_create_system_prompts
+-- Description: Create system_prompts table and seed with default prompts
 
-// DefaultSongConceptPromptTemplate is the default system prompt template for SongConceptAgent.
-// Use fmt.Sprintf with language parameter (3 times) to generate the full prompt.
-const DefaultSongConceptPromptTemplate = `คุณคือ AI โปรดิวเซอร์เพลงมืออาชีพที่เชี่ยวชาญในการสร้าง prompt สำหรับ Suno AI
+-- +goose Up
+CREATE TABLE IF NOT EXISTS system_prompts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prompt_type VARCHAR(50) UNIQUE NOT NULL,
+    prompt_content TEXT NOT NULL,
+    updated_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create index for prompt type lookup
+CREATE INDEX IF NOT EXISTS idx_system_prompts_type ON system_prompts(prompt_type);
+
+-- Trigger to auto-update updated_at
+CREATE TRIGGER update_system_prompts_updated_at
+    BEFORE UPDATE ON system_prompts
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Seed default prompts
+INSERT INTO system_prompts (prompt_type, prompt_content) VALUES
+('song_concept', 'คุณคือ AI โปรดิวเซอร์เพลงมืออาชีพที่เชี่ยวชาญในการสร้าง prompt สำหรับ Suno AI
 
 หน้าที่ของคุณคือวิเคราะห์ concept เพลงจากผู้ใช้และสร้าง prompt ที่จะผลิตเพลงคุณภาพสูง
 
@@ -67,10 +86,9 @@ const DefaultSongConceptPromptTemplate = `คุณคือ AI โปรดิ�
 - true เฉพาะเมื่อผู้ใช้ระบุชัดว่าต้องการเพลงบรรเลงไม่มีเสียงร้อง
 - false สำหรับเพลงทั่วไป
 
-ส่งออกเฉพาะ JSON object เท่านั้น ไม่ต้องอธิบายเพิ่มเติม`
+ส่งออกเฉพาะ JSON object เท่านั้น ไม่ต้องอธิบายเพิ่มเติม'),
 
-// DefaultSongSelectorPrompt is the default system prompt for SongSelectorAgent.
-const DefaultSongSelectorPrompt = `คุณคือ AI ภัณฑารักษ์เพลงมืออาชีพ มีหน้าที่เลือกเพลงที่ดีที่สุดจากตัวเลือกที่ Suno AI สร้างมา
+('song_selector', 'คุณคือ AI ภัณฑารักษ์เพลงมืออาชีพ มีหน้าที่เลือกเพลงที่ดีที่สุดจากตัวเลือกที่ Suno AI สร้างมา
 
 ## เกณฑ์การเลือก (เรียงตามความสำคัญ):
 
@@ -96,10 +114,9 @@ const DefaultSongSelectorPrompt = `คุณคือ AI ภัณฑารั�
   "reasoning": "อธิบายสั้นๆ ว่าทำไมถึงเลือกเพลงนี้ (ภาษาไทย)"
 }
 
-ตัวอย่าง reasoning: "เลือกเพลงนี้เพราะชื่อ 'ความรักครั้งสุดท้าย' ตรงกับ concept เรื่องการอกหัก และความยาว 3:24 เหมาะสำหรับ music video"`
+ตัวอย่าง reasoning: "เลือกเพลงนี้เพราะชื่อ ''ความรักครั้งสุดท้าย'' ตรงกับ concept เรื่องการอกหัก และความยาว 3:24 เหมาะสำหรับ music video"'),
 
-// DefaultImageConceptPrompt is the default system prompt for ImageConceptAgent.
-const DefaultImageConceptPrompt = `คุณคือ AI ศิลปินภาพมืออาชีพ มีหน้าที่สร้าง prompt สำหรับภาพพื้นหลัง music video
+('image_concept', 'คุณคือ AI ศิลปินภาพมืออาชีพ มีหน้าที่สร้าง prompt สำหรับภาพพื้นหลัง music video
 
 ## หลักการสร้าง Image Prompt ที่ดี:
 
@@ -158,4 +175,10 @@ const DefaultImageConceptPrompt = `คุณคือ AI ศิลปินภ�
 - aspectRatio: ใช้ "16:9" สำหรับ music video เสมอ
 - resolution: "1K" สำหรับความเร็ว, "2K" สำหรับคุณภาพสูง
 - เขียน prompt เป็นภาษาอังกฤษเพื่อผลลัพธ์ที่ดีที่สุด
-- หลีกเลี่ยงเนื้อหาที่ไม่เหมาะสม`
+- หลีกเลี่ยงเนื้อหาที่ไม่เหมาะสม')
+ON CONFLICT (prompt_type) DO NOTHING;
+
+-- +goose Down
+DROP TRIGGER IF EXISTS update_system_prompts_updated_at ON system_prompts;
+DROP INDEX IF EXISTS idx_system_prompts_type;
+DROP TABLE IF EXISTS system_prompts;

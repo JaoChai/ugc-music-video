@@ -16,6 +16,7 @@ import (
 const (
 	ContextKeyUserID = "user_id"
 	ContextKeyEmail  = "email"
+	ContextKeyRole   = "role"
 )
 
 // AuthMiddleware creates a middleware for JWT authentication
@@ -51,6 +52,7 @@ func AuthMiddleware(authService service.AuthService, logger *zap.Logger) gin.Han
 		// Set user info in context
 		c.Set(ContextKeyUserID, claims.UserID)
 		c.Set(ContextKeyEmail, claims.Email)
+		c.Set(ContextKeyRole, claims.Role)
 
 		c.Next()
 	}
@@ -76,4 +78,15 @@ func GetEmailFromContext(c *gin.Context) (string, bool) {
 
 	emailStr, ok := email.(string)
 	return emailStr, ok
+}
+
+// GetRoleFromContext extracts the role from gin context
+func GetRoleFromContext(c *gin.Context) (string, bool) {
+	role, exists := c.Get(ContextKeyRole)
+	if !exists {
+		return "", false
+	}
+
+	roleStr, ok := role.(string)
+	return roleStr, ok
 }

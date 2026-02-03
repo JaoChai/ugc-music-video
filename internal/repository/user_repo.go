@@ -43,9 +43,14 @@ func NewUserRepository(db *database.DB) UserRepository {
 
 // Create inserts a new user into the database.
 func (r *userRepository) Create(ctx context.Context, user *models.User) error {
+	// Set default role if not specified
+	if user.Role == "" {
+		user.Role = "user"
+	}
+
 	query := `
-		INSERT INTO users (id, email, password_hash, name, openrouter_model)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (id, email, password_hash, name, openrouter_model, role)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING created_at, updated_at
 	`
 
@@ -57,6 +62,7 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 		user.PasswordHash,
 		user.Name,
 		user.OpenRouterModel,
+		user.Role,
 	).Scan(&user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
@@ -69,7 +75,7 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 // GetByID retrieves a user by their ID.
 func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
+		SELECT id, email, password_hash, name, role, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -80,6 +86,7 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		&user.Email,
 		&user.PasswordHash,
 		&user.Name,
+		&user.Role,
 		&user.OpenRouterModel,
 		&user.OpenRouterAPIKey,
 		&user.KIEAPIKey,
@@ -100,7 +107,7 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 // GetByEmail retrieves a user by their email address.
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
+		SELECT id, email, password_hash, name, role, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -111,6 +118,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.
 		&user.Email,
 		&user.PasswordHash,
 		&user.Name,
+		&user.Role,
 		&user.OpenRouterModel,
 		&user.OpenRouterAPIKey,
 		&user.KIEAPIKey,

@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/jaochai/ugc/internal/agents"
 	"github.com/jaochai/ugc/internal/middleware"
 	"github.com/jaochai/ugc/internal/models"
 	"github.com/jaochai/ugc/internal/repository"
@@ -44,24 +43,27 @@ type RefreshResponse struct {
 
 // AuthHandler handles authentication-related HTTP requests
 type AuthHandler struct {
-	authService   service.AuthService
-	userRepo      repository.UserRepository
-	cryptoService service.CryptoService
-	logger        *zap.Logger
+	authService      service.AuthService
+	userRepo         repository.UserRepository
+	systemPromptRepo repository.SystemPromptRepository
+	cryptoService    service.CryptoService
+	logger           *zap.Logger
 }
 
 // NewAuthHandler creates a new AuthHandler instance
 func NewAuthHandler(
 	authService service.AuthService,
 	userRepo repository.UserRepository,
+	systemPromptRepo repository.SystemPromptRepository,
 	cryptoService service.CryptoService,
 	logger *zap.Logger,
 ) *AuthHandler {
 	return &AuthHandler{
-		authService:   authService,
-		userRepo:      userRepo,
-		cryptoService: cryptoService,
-		logger:        logger,
+		authService:      authService,
+		userRepo:         userRepo,
+		systemPromptRepo: systemPromptRepo,
+		cryptoService:    cryptoService,
+		logger:           logger,
 	}
 }
 
@@ -767,11 +769,33 @@ func (h *AuthHandler) GetAgentPrompts(c *gin.Context) {
 		return
 	}
 
+	// Get user's custom prompts
 	songConcept, songSelector, imageConcept, err := h.userRepo.GetPrompts(c.Request.Context(), userID)
 	if err != nil {
 		h.logger.Error("failed to get prompts", zap.Error(err), zap.String("user_id", userID.String()))
 		response.Error(c, err)
 		return
+	}
+
+	// Get system defaults from DB
+	systemPrompts, err := h.systemPromptRepo.GetAll(c.Request.Context())
+	if err != nil {
+		h.logger.Error("failed to get system prompts", zap.Error(err))
+		response.Error(c, err)
+		return
+	}
+
+	// Build defaults from DB
+	defaults := models.AgentDefaultPrompts{}
+	for _, sp := range systemPrompts {
+		switch sp.PromptType {
+		case "song_concept":
+			defaults.SongConcept = sp.PromptContent
+		case "song_selector":
+			defaults.SongSelector = sp.PromptContent
+		case "image_concept":
+			defaults.ImageConcept = sp.PromptContent
+		}
 	}
 
 	response.Success(c, models.AgentPromptsResponse{
@@ -780,11 +804,7 @@ func (h *AuthHandler) GetAgentPrompts(c *gin.Context) {
 			SongSelectorPrompt: songSelector,
 			ImageConceptPrompt: imageConcept,
 		},
-		Defaults: models.AgentDefaultPrompts{
-			SongConcept:  agents.DefaultSongConceptPromptTemplate,
-			SongSelector: agents.DefaultSongSelectorPrompt,
-			ImageConcept: agents.DefaultImageConceptPrompt,
-		},
+		Defaults: defaults,
 	})
 }
 

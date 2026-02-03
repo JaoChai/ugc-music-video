@@ -8,18 +8,19 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID               uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	Email            string    `json:"email" gorm:"uniqueIndex;not null"`
-	PasswordHash     string    `json:"-" gorm:"not null"`
-	Name             *string   `json:"name"`
-	OpenRouterModel  string    `json:"openrouter_model" gorm:"default:''"`
+	ID                 uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	Email              string    `json:"email" gorm:"uniqueIndex;not null"`
+	PasswordHash       string    `json:"-" gorm:"not null"`
+	Name               *string   `json:"name"`
+	Role               string    `json:"role" gorm:"default:'user';not null"` // 'user' or 'admin'
+	OpenRouterModel    string    `json:"openrouter_model" gorm:"default:''"`
 	OpenRouterAPIKey   *string   `json:"-"` // Encrypted, never expose in JSON
 	KIEAPIKey          *string   `json:"-"` // Encrypted, never expose in JSON
 	SongConceptPrompt  *string   `json:"-" gorm:"column:song_concept_prompt"`  // Custom system prompt
 	SongSelectorPrompt *string   `json:"-" gorm:"column:song_selector_prompt"` // Custom system prompt
 	ImageConceptPrompt *string   `json:"-" gorm:"column:image_concept_prompt"` // Custom system prompt
 	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // CreateUserInput represents the input for user registration
@@ -58,6 +59,7 @@ type UserResponse struct {
 	ID              uuid.UUID `json:"id"`
 	Email           string    `json:"email"`
 	Name            *string   `json:"name"`
+	Role            string    `json:"role"`
 	OpenRouterModel string    `json:"openrouter_model"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -69,6 +71,7 @@ func (u *User) ToResponse() UserResponse {
 		ID:              u.ID,
 		Email:           u.Email,
 		Name:            u.Name,
+		Role:            u.Role,
 		OpenRouterModel: u.OpenRouterModel,
 		CreatedAt:       u.CreatedAt,
 		UpdatedAt:       u.UpdatedAt,

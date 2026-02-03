@@ -28,6 +28,7 @@ var (
 type Claims struct {
 	UserID uuid.UUID `json:"user_id"`
 	Email  string    `json:"email"`
+	Role   string    `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -176,6 +177,7 @@ func (s *authService) RefreshToken(tokenString string) (string, error) {
 	newClaims := &Claims{
 		UserID: claims.UserID,
 		Email:  claims.Email,
+		Role:   claims.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiry)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -215,6 +217,7 @@ func (s *authService) generateToken(user *models.User) (string, error) {
 	claims := &Claims{
 		UserID: user.ID,
 		Email:  user.Email,
+		Role:   user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.jwtExpiry)),
 			IssuedAt:  jwt.NewNumericDate(now),

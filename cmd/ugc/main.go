@@ -68,6 +68,7 @@ func main() {
 	// Create repositories
 	userRepo := repository.NewUserRepository(db)
 	jobRepo := repository.NewJobRepository(db)
+	systemPromptRepo := repository.NewSystemPromptRepository(db)
 
 	// Note: OpenRouter/KIE clients are now created per-user in worker tasks
 	// using encrypted API keys from the database
@@ -153,7 +154,7 @@ func main() {
 	}
 
 	// Setup Gin router
-	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, cryptoService, asynqClient, redisClient, logger)
+	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, systemPromptRepo, cryptoService, asynqClient, redisClient, logger)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -233,6 +234,7 @@ func setupRouter(
 	jobService service.JobService,
 	jobRepo repository.JobRepository,
 	userRepo repository.UserRepository,
+	systemPromptRepo repository.SystemPromptRepository,
 	cryptoService service.CryptoService,
 	asynqClient *asynq.Client,
 	redisClient *redis.Client,
@@ -272,13 +274,18 @@ func setupRouter(
 	v1 := router.Group("/api/v1")
 	{
 		// Auth routes
-		authHandler := handler.NewAuthHandler(authService, userRepo, cryptoService, logger)
+		authHandler := handler.NewAuthHandler(authService, userRepo, systemPromptRepo, cryptoService, logger)
 		authHandler.RegisterRoutes(v1)
 
 		// Job routes (protected)
 		authMiddleware := middleware.AuthMiddleware(authService, logger)
 		jobHandler := handler.NewJobHandler(jobService, userRepo, cryptoService, asynqClient, logger)
 		jobHandler.RegisterRoutes(v1, authMiddleware)
+
+		// Admin routes (protected + admin only)
+		adminMiddleware := middleware.AdminMiddleware(logger)
+		adminHandler := handler.NewAdminHandler(systemPromptRepo, logger)
+		adminHandler.RegisterRoutes(v1, authMiddleware, adminMiddleware)
 
 		// Webhook routes (with rate limiting and token-based auth for external services)
 		urlValidator := security.NewURLValidator(cfg.Webhook.AllowedHosts)
