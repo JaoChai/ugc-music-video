@@ -59,6 +59,7 @@ var DefaultAllowedHosts = []string{
 	"s3.amazonaws.com",
 	// NanoBanana image hosts
 	"nanobananastorage.blob.core.windows.net",
+	"aiquickdraw.com",
 }
 
 // ValidateURL validates that a URL is safe to fetch.
