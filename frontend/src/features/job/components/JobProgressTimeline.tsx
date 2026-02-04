@@ -36,7 +36,8 @@ export function JobProgressTimeline({ currentStatus, className }: JobProgressTim
         {timelineSteps.map((step, stepIdx) => {
           const stepIndex = getStatusIndex(step.status)
           const isCompleted = !isFailed && currentIndex > stepIndex
-          const isCurrent = currentStatus === step.status
+          // Don't show spinner for 'completed' - it's a terminal state, show checkmark instead
+          const isCurrent = currentStatus === step.status && currentStatus !== 'completed'
           const isFuture = !isFailed && currentIndex < stepIndex
           const isFailedStep = isFailed && currentIndex === stepIndex
 
@@ -85,7 +86,8 @@ export function JobProgressTimeline({ currentStatus, className }: JobProgressTim
                     <p
                       className={cn(
                         'text-sm font-medium',
-                        isCompleted && 'text-green-600',
+                        // Show green for completed steps, including the final 'completed' step itself
+                        (isCompleted || (currentStatus === 'completed' && step.status === 'completed')) && 'text-green-600',
                         isCurrent && 'text-zinc-900',
                         (isFuture || isFailed) && 'text-gray-500'
                       )}
