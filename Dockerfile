@@ -21,8 +21,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ffmpeg for video processing
-RUN apk add --no-cache ffmpeg ca-certificates tzdata
+# Install ffmpeg for video processing and curl for downloading media files
+RUN apk add --no-cache ffmpeg curl ca-certificates tzdata
 
 # Copy binary from builder
 COPY --from=builder /app/ugc .
