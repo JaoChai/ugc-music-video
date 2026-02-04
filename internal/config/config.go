@@ -100,7 +100,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("JWT_EXPIRY", "24h")
 	viper.SetDefault("WEBHOOK_RATE_LIMIT_RPS", 10)
 	viper.SetDefault("WEBHOOK_RATE_LIMIT_BURST", 20)
-	viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", "cdn1.suno.ai,cdn2.suno.ai,cdn.kie.ai,storage.kie.ai")
+	viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", "suno.ai,suno.com,audiopipe.suno.ai,cdn1.suno.ai,cdn2.suno.ai,kie.ai,cdn.kie.ai,storage.kie.ai,musicfile.kie.ai,amazonaws.com,cloudfront.net,s3.amazonaws.com,nanobananastorage.blob.core.windows.net,aiquickdraw.com")
 
 	// Parse JWT expiry duration
 	jwtExpiry, err := time.ParseDuration(viper.GetString("JWT_EXPIRY"))
