@@ -267,6 +267,142 @@ function useJobWithPolling(id: string) {
 
 ---
 
+### Systematic Debugging Pattern (เมื่อ fix ไม่ได้ผล)
+
+เมื่อแก้ไขแล้วปัญหาไม่หาย ให้หยุดแก้และทำตามขั้นตอนนี้:
+
+```
+1. STOP - หยุดแก้ไข
+2. TRACE - trace code path จาก entry point ถึง error
+3. VERIFY - ตรวจสอบว่า code ที่แก้ถูกใช้จริงหรือไม่
+4. ANALYZE - ใช้ Sequential Thinking วิเคราะห์อย่างเป็นระบบ
+5. FIX - แก้ไขที่ root cause
+```
+
+**ตัวอย่าง: URL Allowlist Debug**
+```bash
+# TRACE: หา usage ของ DefaultAllowedHosts
+grep -r "DefaultAllowedHosts" --include="*.go"
+# ผลลัพธ์: ใช้ใน NewURLValidator เมื่อ allowedHosts empty
+
+# VERIFY: ดูว่าใครเรียก NewURLValidator
+grep -r "NewURLValidator" --include="*.go"
+# ผลลัพธ์: main.go เรียก พร้อม cfg.Webhook.AllowedHosts
+
+# ANALYZE: cfg.Webhook.AllowedHosts มาจากไหน?
+grep -r "AllowedHosts" --include="*.go"
+# ผลลัพธ์: config.go มี viper.SetDefault → ไม่เคย empty!
+
+# FIX: แก้ที่ config.go ไม่ใช่ url_validator.go
+```
+
+---
+
+### LLM Agent Output Design Pattern
+
+**หลักการ:** LLM ควร output creative content เท่านั้น ไม่ควร output API-specific values
+
+```go
+// ❌ BAD - LLM ต้องรู้ว่า Suno มี model อะไรบ้าง
+type SongConceptOutput struct {
+    Prompt string `json:"prompt"`
+    Model  string `json:"model"` // LLM อาจเลือก "V3.5" ที่ไม่มี
+}
+
+// ✅ GOOD - LLM โฟกัส creative work
+type SongConceptOutput struct {
+    Prompt string `json:"prompt"`
+    Style  string `json:"style"`
+    Title  string `json:"title"`
+    // Model, AspectRatio, Resolution → hardcode ใน code
+}
+
+func (o *SongConceptOutput) ToSongPrompt() *models.SongPrompt {
+    return &models.SongPrompt{
+        Prompt: o.Prompt,
+        Model:  "V5", // Hardcode - LLM ไม่ต้องรู้
+    }
+}
+```
+
+**เหตุผล:**
+- LLM ไม่มี knowledge ที่ up-to-date เกี่ยวกับ API versions
+- API validation errors ยากต่อการ debug
+- Hardcode ใน code ง่ายต่อการ maintain และ update
+
+---
+
+### Configuration Single Source of Truth Pattern
+
+**หลักการ:** Configuration ควรมี single source of truth ไม่ใช่หลายที่
+
+```go
+// ❌ BAD - มี default หลายที่
+// url_validator.go
+var DefaultAllowedHosts = []string{"cdn1.suno.ai", ...}
+
+// config.go
+viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", "cdn1.suno.ai,...")
+// → สับสนว่าต้องแก้ที่ไหน
+
+// ✅ GOOD - Single source of truth
+// config.go เป็น source of truth
+viper.SetDefault("WEBHOOK_ALLOWED_HOSTS",
+    "cdn1.suno.ai,cdn2.suno.ai,musicfile.kie.ai,aiquickdraw.com")
+
+// url_validator.go ไม่มี default
+func NewURLValidator(allowedHosts []string) *URLValidator {
+    // ใช้ค่าที่ส่งมาเสมอ ไม่มี fallback
+}
+```
+
+---
+
+### Container Dependency Verification Pattern
+
+เมื่อ code ใช้ external command ต้องตรวจสอบ:
+
+```go
+// เมื่อเพิ่ม exec.Command ใหม่
+cmd := exec.CommandContext(ctx, "curl", args...)  // <- ต้องมี curl ใน container
+
+// Checklist:
+// 1. ตรวจสอบ Dockerfile
+// 2. ทดสอบใน Docker locally
+// 3. Document dependency ใน code comment
+```
+
+```dockerfile
+# Dockerfile - ระบุ dependencies ให้ชัด
+# Install dependencies for video processing
+# - ffmpeg: video encoding
+# - curl: downloading media files from external URLs
+RUN apk add --no-cache ffmpeg curl ca-certificates tzdata
+```
+
+---
+
+### Railway Deployment Verification Pattern
+
+หลังจาก push code ให้ตรวจสอบ:
+
+```bash
+# 1. ดู deployment status
+railway status
+
+# 2. ดู logs ว่า container ใหม่เริ่มทำงาน
+railway logs -s backend | head -10
+# ดู timestamp ว่าใหม่กว่า commit ที่ push
+
+# 3. ถ้า auto-deploy ไม่ทำงาน
+railway redeploy -s backend --yes
+
+# 4. รอ container เริ่มใหม่แล้วทดสอบ
+sleep 60 && curl https://api.example.com/health
+```
+
+---
+
 ## Add New Patterns Below
 
 _When you discover a useful pattern, document it here_

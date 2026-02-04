@@ -203,6 +203,97 @@ What becomes easier or more difficult because of this decision?
 
 ---
 
+## ADR-006: LLM Agents ไม่ควร Output API-Specific Values
+
+**Date:** 2026-02-04
+
+**Status:** Accepted
+
+**Context:**
+SongConceptAgent เดิมให้ LLM เลือก `model` field (เช่น "V5", "V3.5") แต่ LLM เลือกค่าที่ไม่มีอยู่จริง ทำให้เกิด Error 422 จาก Suno API
+
+**Decision:**
+- ลบ API-specific fields ออกจาก LLM output (Model, AspectRatio, Resolution)
+- Hardcode ค่าเหล่านี้ใน code แทน
+- LLM ควรโฟกัสเฉพาะ creative content (lyrics, style, title)
+
+**Rationale:**
+- LLM ไม่มี up-to-date knowledge เกี่ยวกับ API versions
+- API อาจเปลี่ยน supported values โดยที่ LLM ไม่รู้
+- Validation errors จาก external API ยากต่อการ debug
+- การ hardcode ใน code ง่ายต่อการ update และ maintain
+
+**Implementation:**
+```go
+// Before: LLM output มี Model
+type SongConceptOutput struct {
+    Prompt string `json:"prompt"`
+    Model  string `json:"model"` // LLM เลือก "V3.5" ที่ไม่มี
+}
+
+// After: Hardcode ใน conversion function
+type SongConceptOutput struct {
+    Prompt string `json:"prompt"`
+    // Model ไม่มีใน output
+}
+
+func (o *SongConceptOutput) ToSongPrompt() *models.SongPrompt {
+    return &models.SongPrompt{
+        Prompt: o.Prompt,
+        Model:  "V5", // Hardcode ที่นี่
+    }
+}
+```
+
+**Consequences:**
+- เมื่อ API เปลี่ยน supported values ต้องแก้ code และ deploy
+- ไม่ flexible ถ้าต้องการให้ user เลือก (ต้อง expose เป็น user setting แทน)
+- ลด Error 422 จาก invalid API parameters
+
+---
+
+## ADR-007: Configuration Single Source of Truth
+
+**Date:** 2026-02-04
+
+**Status:** Accepted
+
+**Context:**
+URL allowlist มี default อยู่สองที่:
+1. `url_validator.go` → `DefaultAllowedHosts` constant
+2. `config.go` → `viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", ...)`
+
+ทำให้สับสนว่าต้องแก้ที่ไหน และแก้ผิดที่หลายรอบ
+
+**Decision:**
+- `config.go` เป็น single source of truth สำหรับทุก configuration
+- `DefaultAllowedHosts` ใน `url_validator.go` เป็น fallback เท่านั้น
+- Document ใน code ว่า actual default มาจาก config
+
+**Rationale:**
+- ลดความสับสนว่าต้องแก้ที่ไหน
+- Viper pattern: SetDefault → env var override → ใช้ค่า
+- ง่ายต่อการ configure per-environment ผ่าน env vars
+
+**Implementation:**
+```go
+// config.go - Single Source of Truth
+viper.SetDefault("WEBHOOK_ALLOWED_HOSTS",
+    "cdn1.suno.ai,cdn2.suno.ai,cdn.kie.ai,storage.kie.ai,musicfile.kie.ai,aiquickdraw.com")
+
+// url_validator.go - Document ว่าเป็น fallback
+// DefaultAllowedHosts is used as fallback only when NewURLValidator
+// receives empty slice. In production, hosts come from config.go.
+var DefaultAllowedHosts = []string{...}
+```
+
+**Consequences:**
+- ต้อง update config.go เมื่อเพิ่ม allowed hosts
+- env var `WEBHOOK_ALLOWED_HOSTS` สามารถ override ได้
+- DefaultAllowedHosts ยังมีไว้สำหรับ unit tests
+
+---
+
 ## Add New Decisions Below
 
 _When making significant architecture decisions, document them here_

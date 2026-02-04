@@ -261,6 +261,163 @@ export function PrivateRoute({ children }: PrivateRouteProps) {
 
 ---
 
+### [2026-02-04] Error 422 - แก้ผิดที่เพราะไม่ Trace Code Path
+
+**Context:** Music generation ล้มเหลวด้วย Error 422 จาก Suno API
+
+**Problem:** LLM agent เลือก model "V3.5" ที่ไม่มีอยู่จริง ทำให้ Suno API reject
+
+**การแก้ไขที่ผิดพลาด:**
+```go
+// Fix #1: Force ใน handlers.go - ยังไม่หาย
+job.SongPrompt.Model = "V5"
+
+// Fix #2: ลบ Model field จาก agent output - สำเร็จ!
+type SongConceptOutput struct {
+    Prompt string `json:"prompt"`
+    // Model string `json:"model"` // ลบออก
+}
+
+func (o *SongConceptOutput) ToSongPrompt() *models.SongPrompt {
+    return &models.SongPrompt{
+        Model: "V5", // Hardcode ที่นี่แทน
+    }
+}
+```
+
+**บทเรียน:**
+- LLM ไม่ควร output ค่าที่ต้องมี exact match กับ external API
+- API-specific values (model version, aspect ratio) ควร hardcode ใน code
+- LLM ควรโฟกัส creative work เท่านั้น
+
+**Prevention:**
+- ไม่ให้ LLM เลือกค่าที่มี validation จาก external API
+- Review agent output schema ว่ามี field ไหนที่ควร hardcode
+
+---
+
+### [2026-02-04] URL Allowlist - แก้ไฟล์ที่ไม่ถูกใช้งาน
+
+**Context:** Audio URL จาก `musicfile.kie.ai` ถูก reject ด้วย "host not in allowlist"
+
+**Problem:** แก้ไข `DefaultAllowedHosts` ใน `url_validator.go` หลายรอบ แต่ปัญหาไม่หาย
+
+**สาเหตุที่แท้จริง:**
+```go
+// url_validator.go - แก้ตรงนี้
+var DefaultAllowedHosts = []string{
+    "musicfile.kie.ai", // เพิ่มแล้ว แต่ไม่มีผล!
+}
+
+func NewURLValidator(allowedHosts []string) *URLValidator {
+    hosts := allowedHosts
+    if len(hosts) == 0 {
+        hosts = DefaultAllowedHosts // ใช้เมื่อ empty เท่านั้น!
+    }
+}
+
+// config.go - ปัญหาอยู่ตรงนี้
+viper.SetDefault("WEBHOOK_ALLOWED_HOSTS",
+    "cdn1.suno.ai,cdn2.suno.ai,cdn.kie.ai,storage.kie.ai")
+// ไม่มี musicfile.kie.ai!
+
+// main.go - ส่งค่าจาก config เสมอ
+urlValidator := security.NewURLValidator(cfg.Webhook.AllowedHosts)
+// cfg.Webhook.AllowedHosts ไม่เคย empty → DefaultAllowedHosts ไม่ถูกใช้
+```
+
+**Solution:**
+```go
+// config.go - เพิ่ม hosts ครบ
+viper.SetDefault("WEBHOOK_ALLOWED_HOSTS",
+    "cdn1.suno.ai,cdn2.suno.ai,cdn.kie.ai,storage.kie.ai,musicfile.kie.ai,aiquickdraw.com")
+```
+
+**บทเรียน:**
+- **ต้อง trace code path ทั้งหมดก่อนแก้ไข**
+- Default values อาจไม่ถูกใช้ถ้ามี config override
+- แก้ 10 รอบก็ไม่หาย ถ้าแก้ผิดที่
+
+**Prevention:**
+- ใช้ grep หา usage ของ function/variable ก่อนแก้
+- ดู call hierarchy: ใครเรียก? ส่งค่าอะไรมา?
+- ถ้าแก้แล้วไม่หาย → หยุด แล้ววิเคราะห์ใหม่
+
+---
+
+### [2026-02-04] Container Missing Dependency (curl)
+
+**Context:** Video processing ล้มเหลวใน production แต่ local ทำงานได้
+
+**Problem:**
+```
+Error: curl: executable file not found in $PATH
+```
+
+**สาเหตุ:**
+```go
+// processor.go ใช้ curl
+func downloadFile(ctx context.Context, url, destPath string) error {
+    cmd := exec.CommandContext(ctx, "curl", "-L", "-o", destPath, url)
+    return cmd.Run()
+}
+
+// Dockerfile ไม่ได้ติดตั้ง curl
+RUN apk add --no-cache ffmpeg ca-certificates tzdata
+// ไม่มี curl!
+```
+
+**Solution:**
+```dockerfile
+RUN apk add --no-cache ffmpeg curl ca-certificates tzdata
+```
+
+**บทเรียน:**
+- **Local environment ≠ Production environment**
+- เมื่อ code ใช้ external command ต้องตรวจสอบ Dockerfile
+- Error ที่เกิดเฉพาะ production มักเกี่ยวกับ dependencies
+
+**Prevention:**
+- เมื่อเพิ่ม `exec.Command()` ใหม่ → ตรวจสอบ Dockerfile
+- ใช้ Go native library แทน external command ถ้าเป็นไปได้
+- Test ใน Docker locally ก่อน deploy
+
+---
+
+### [2026-02-04] Frontend Progress Timeline - Terminal State Logic
+
+**Context:** Job status "completed" แต่ progress timeline ยังแสดง spinner
+
+**Problem:**
+```typescript
+// Logic เดิม
+const isCompleted = currentIndex > stepIndex  // 7 > 7 = false
+const isCurrent = currentStatus === step.status // true → spinner
+
+// เมื่อ currentStatus = 'completed' (index 7)
+// และ step.status = 'completed' (index 7)
+// → isCompleted = false, isCurrent = true → แสดง spinner ❌
+```
+
+**Solution:**
+```typescript
+// Don't show spinner for terminal states
+const isCurrent = currentStatus === step.status && currentStatus !== 'completed'
+
+// สำหรับ text color
+(isCompleted || (currentStatus === 'completed' && step.status === 'completed')) && 'text-green-600'
+```
+
+**บทเรียน:**
+- Terminal states (completed, failed) ต้อง handle แยก
+- Index comparison มี edge case ที่ boundary
+
+**Prevention:**
+- ทดสอบ UI กับทุก status รวมถึง terminal states
+- เขียน test cases สำหรับ boundary conditions
+
+---
+
 ## Add New Bug Patterns Below
 
 _When you encounter a bug, document it here following the template above_
