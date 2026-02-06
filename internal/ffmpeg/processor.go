@@ -75,11 +75,13 @@ func (p *Processor) CreateMusicVideo(ctx context.Context, input CreateMusicVideo
 	}
 
 	// Create video using FFmpeg
-	// Command: ffmpeg -loop 1 -i image.png -i audio.mp3 -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -shortest output.mp4
+	// Force 16:9 output (1920x1080) because NanoBanana API may not honor aspect_ratio parameter
+	// -vf scale: scales image to fit 1920x1080 while maintaining aspect ratio, then pads with black bars
 	args := []string{
 		"-loop", "1",
 		"-i", imagePath,
 		"-i", audioPath,
+		"-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black",
 		"-c:v", "libx264",
 		"-tune", "stillimage",
 		"-c:a", "aac",
