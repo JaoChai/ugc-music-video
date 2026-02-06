@@ -11,6 +11,8 @@ import (
 	"github.com/hibiken/asynq"
 	"go.uber.org/zap"
 
+	apperrors "github.com/jaochai/ugc/pkg/errors"
+
 	"github.com/jaochai/ugc/internal/models"
 	"github.com/jaochai/ugc/internal/repository"
 	"github.com/jaochai/ugc/internal/security"
@@ -99,16 +101,7 @@ func (h *WebhookHandler) RegisterRoutes(rg *gin.RouterGroup, rateLimitMiddleware
 	}
 
 	{
-		// Legacy KIE-style routes (deprecated, for backward compatibility only)
-		// TODO: Remove these after migration period
-		// WARNING: These routes have rate limiting but NO authentication
-		kie := webhooks.Group("/kie")
-		{
-			kie.POST("/suno", h.SunoCallback)
-			kie.POST("/nano", h.NanoCallback)
-		}
-
-		// Authenticated webhook routes (new, with token in path)
+		// Authenticated webhook routes (with token in path)
 		// Format: /webhooks/:token/suno/:job_id
 		authenticated := webhooks.Group("/:token")
 		if authMiddleware != nil {
@@ -274,8 +267,16 @@ func (h *WebhookHandler) SunoCallback(c *gin.Context) {
 			return
 		}
 
-		// Update job with generated songs
+		// Update job with generated songs (atomic — handles concurrent callbacks)
 		if err := h.jobService.UpdateGeneratedSongs(c.Request.Context(), job.ID, payload.Data.TaskID, songs); err != nil {
+			var appErr *apperrors.AppError
+			if errors.As(err, &appErr) && appErr.Code == http.StatusConflict {
+				h.logger.Warn("suno callback conflict - already processed by another callback",
+					zap.String("job_id", job.ID.String()),
+				)
+				c.JSON(http.StatusOK, gin.H{"message": "acknowledged"})
+				return
+			}
 			h.logger.Error("failed to update job with generated songs",
 				zap.Error(err),
 				zap.String("job_id", job.ID.String()),
@@ -448,8 +449,16 @@ func (h *WebhookHandler) NanoCallback(c *gin.Context) {
 			return
 		}
 
-		// Update job with image URL
+		// Update job with image URL (atomic — handles concurrent callbacks)
 		if err := h.jobService.UpdateImageURL(c.Request.Context(), job.ID, payload.Data.TaskID, imageURL); err != nil {
+			var appErr *apperrors.AppError
+			if errors.As(err, &appErr) && appErr.Code == http.StatusConflict {
+				h.logger.Warn("nano callback conflict - already processed by another callback",
+					zap.String("job_id", job.ID.String()),
+				)
+				c.JSON(http.StatusOK, gin.H{"message": "acknowledged"})
+				return
+			}
 			h.logger.Error("failed to update job with image URL",
 				zap.Error(err),
 				zap.String("job_id", job.ID.String()),

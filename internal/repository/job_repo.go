@@ -18,6 +18,9 @@ import (
 // ErrJobNotFound is returned when a job is not found.
 var ErrJobNotFound = errors.New("job not found")
 
+// ErrStatusConflict is returned when a concurrent modification is detected.
+var ErrStatusConflict = errors.New("job status conflict: concurrent modification detected")
+
 // JobRepository defines the interface for job data access.
 type JobRepository interface {
 	Create(ctx context.Context, job *models.Job) error
@@ -29,6 +32,14 @@ type JobRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateWithError(ctx context.Context, id uuid.UUID, errorMessage string) error
 	Delete(ctx context.Context, id uuid.UUID) error
+
+	// Atomic update methods — use WHERE status = expectedStatus to prevent TOCTOU races
+	UpdateSongPromptAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, prompt *models.SongPrompt, newStatus string) error
+	UpdateGeneratedSongsAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, taskID string, songs []models.GeneratedSong, newStatus string) error
+	UpdateSelectedSongAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, songID string, audioURL string, newStatus string) error
+	UpdateImagePromptAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, prompt *models.ImagePrompt) error
+	UpdateImageURLAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, taskID string, imageURL string, newStatus string) error
+	UpdateVideoURLAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, videoURL string, newStatus string) error
 }
 
 // jobRepository implements JobRepository using PostgreSQL.
@@ -298,43 +309,63 @@ func (r *jobRepository) Update(ctx context.Context, job *models.Job) error {
 }
 
 // UpdateStatus updates only the status of a job.
+// Guards against overwriting terminal states (completed/failed).
 func (r *jobRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status string) error {
 	query := `
 		UPDATE jobs SET
 			status = $2,
 			updated_at = $3
-		WHERE id = $1
+		WHERE id = $1 AND status NOT IN ($4, $5)
 	`
 
-	result, err := r.db.Pool().Exec(ctx, query, id, status, time.Now().UTC())
+	result, err := r.db.Pool().Exec(ctx, query, id, status, time.Now().UTC(), models.StatusCompleted, models.StatusFailed)
 	if err != nil {
 		return fmt.Errorf("failed to update job status: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrJobNotFound
+		// Check if job exists to distinguish "not found" from "already terminal"
+		var exists bool
+		err := r.db.Pool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE id = $1)`, id).Scan(&exists)
+		if err != nil {
+			return fmt.Errorf("failed to check job existence: %w", err)
+		}
+		if !exists {
+			return ErrJobNotFound
+		}
+		return ErrStatusConflict
 	}
 
 	return nil
 }
 
 // UpdateWithError updates the job status to failed and sets the error message.
+// Guards against overwriting terminal states (completed/failed).
 func (r *jobRepository) UpdateWithError(ctx context.Context, id uuid.UUID, errorMessage string) error {
 	query := `
 		UPDATE jobs SET
 			status = $2,
 			error_message = $3,
 			updated_at = $4
-		WHERE id = $1
+		WHERE id = $1 AND status NOT IN ($5, $6)
 	`
 
-	result, err := r.db.Pool().Exec(ctx, query, id, models.StatusFailed, errorMessage, time.Now().UTC())
+	result, err := r.db.Pool().Exec(ctx, query, id, models.StatusFailed, errorMessage, time.Now().UTC(), models.StatusCompleted, models.StatusFailed)
 	if err != nil {
 		return fmt.Errorf("failed to update job with error: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
-		return ErrJobNotFound
+		// Check if job exists to distinguish "not found" from "already terminal"
+		var exists bool
+		err := r.db.Pool().QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE id = $1)`, id).Scan(&exists)
+		if err != nil {
+			return fmt.Errorf("failed to check job existence: %w", err)
+		}
+		if !exists {
+			return ErrJobNotFound
+		}
+		return ErrStatusConflict
 	}
 
 	return nil
@@ -353,6 +384,143 @@ func (r *jobRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		return ErrJobNotFound
 	}
 
+	return nil
+}
+
+// UpdateSongPromptAtomic atomically updates song prompt and transitions status.
+func (r *jobRepository) UpdateSongPromptAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, prompt *models.SongPrompt, newStatus string) error {
+	promptJSON, err := marshalJSONB(prompt)
+	if err != nil {
+		return fmt.Errorf("failed to marshal song_prompt: %w", err)
+	}
+
+	query := `
+		UPDATE jobs SET
+			song_prompt = $2,
+			status = $3,
+			updated_at = $4
+		WHERE id = $1 AND status = $5
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, promptJSON, newStatus, time.Now().UTC(), expectedStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update song prompt: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStatusConflict
+	}
+	return nil
+}
+
+// UpdateGeneratedSongsAtomic atomically updates generated songs, task ID, and transitions status.
+func (r *jobRepository) UpdateGeneratedSongsAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, taskID string, songs []models.GeneratedSong, newStatus string) error {
+	songsJSON, err := marshalJSONB(songs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal generated_songs: %w", err)
+	}
+
+	query := `
+		UPDATE jobs SET
+			suno_task_id = $2,
+			generated_songs = $3,
+			status = $4,
+			updated_at = $5
+		WHERE id = $1 AND status = $6
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, taskID, songsJSON, newStatus, time.Now().UTC(), expectedStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update generated songs: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStatusConflict
+	}
+	return nil
+}
+
+// UpdateSelectedSongAtomic atomically updates selected song, audio URL, and transitions status.
+func (r *jobRepository) UpdateSelectedSongAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, songID string, audioURL string, newStatus string) error {
+	query := `
+		UPDATE jobs SET
+			selected_song_id = $2,
+			audio_url = $3,
+			status = $4,
+			updated_at = $5
+		WHERE id = $1 AND status = $6
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, songID, audioURL, newStatus, time.Now().UTC(), expectedStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update selected song: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStatusConflict
+	}
+	return nil
+}
+
+// UpdateImagePromptAtomic atomically updates the image prompt with status guard (no status transition).
+func (r *jobRepository) UpdateImagePromptAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, prompt *models.ImagePrompt) error {
+	promptJSON, err := marshalJSONB(prompt)
+	if err != nil {
+		return fmt.Errorf("failed to marshal image_prompt: %w", err)
+	}
+
+	query := `
+		UPDATE jobs SET
+			image_prompt = $2,
+			updated_at = $3
+		WHERE id = $1 AND status = $4
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, promptJSON, time.Now().UTC(), expectedStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update image prompt: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStatusConflict
+	}
+	return nil
+}
+
+// UpdateImageURLAtomic atomically updates image URL, task ID, and transitions status.
+func (r *jobRepository) UpdateImageURLAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, taskID string, imageURL string, newStatus string) error {
+	query := `
+		UPDATE jobs SET
+			nano_task_id = $2,
+			image_url = $3,
+			status = $4,
+			updated_at = $5
+		WHERE id = $1 AND status = $6
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, taskID, imageURL, newStatus, time.Now().UTC(), expectedStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update image URL: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStatusConflict
+	}
+	return nil
+}
+
+// UpdateVideoURLAtomic atomically updates video URL and transitions status.
+func (r *jobRepository) UpdateVideoURLAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, videoURL string, newStatus string) error {
+	query := `
+		UPDATE jobs SET
+			video_url = $2,
+			status = $3,
+			updated_at = $4
+		WHERE id = $1 AND status = $5
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, videoURL, newStatus, time.Now().UTC(), expectedStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update video URL: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStatusConflict
+	}
 	return nil
 }
 

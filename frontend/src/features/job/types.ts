@@ -74,6 +74,16 @@ export const STATUS_ORDER: JobStatus[] = [
 // Terminal statuses - job is done (success or failure)
 export const TERMINAL_STATUSES: JobStatus[] = ['completed', 'failed']
 
+// Infer which stage a job failed at based on populated fields
+export function inferFailedAtStatus(job: Job): JobStatus {
+  if (job.video_url) return 'uploading'
+  if (job.image_url) return 'processing_video'
+  if (job.image_prompt) return 'generating_image'
+  if (job.generated_songs?.length) return 'selecting_song'
+  if (job.song_prompt) return 'generating_music'
+  return 'analyzing'
+}
+
 // Status display names
 export const STATUS_DISPLAY_NAMES: Record<JobStatus, string> = {
   pending: 'รอดำเนินการ',

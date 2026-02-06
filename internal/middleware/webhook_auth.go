@@ -11,8 +11,9 @@ import (
 
 // WebhookAuthConfig holds configuration for webhook authentication middleware.
 type WebhookAuthConfig struct {
-	Secret string
-	Logger *zap.Logger
+	Secret      string
+	Environment string // "development", "staging", "production"
+	Logger      *zap.Logger
 }
 
 // WebhookAuthMiddleware validates webhook requests using token-based authentication.
@@ -20,9 +21,16 @@ type WebhookAuthConfig struct {
 // Since KIE API doesn't support HMAC signatures, we use a shared secret token.
 func WebhookAuthMiddleware(cfg WebhookAuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip auth if no secret is configured (development mode)
+		// If no secret is configured, behavior depends on environment
 		if cfg.Secret == "" {
-			cfg.Logger.Warn("webhook authentication disabled - no WEBHOOK_SECRET configured")
+			if cfg.Environment == "production" || cfg.Environment == "staging" {
+				cfg.Logger.Error("webhook authentication unavailable - WEBHOOK_SECRET not configured",
+					zap.String("environment", cfg.Environment),
+				)
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"message": "webhook authentication unavailable"})
+				return
+			}
+			cfg.Logger.Warn("webhook authentication disabled - no WEBHOOK_SECRET configured (development mode)")
 			c.Next()
 			return
 		}

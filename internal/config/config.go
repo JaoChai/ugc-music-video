@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("JWT_EXPIRY", "24h")
 	viper.SetDefault("WEBHOOK_RATE_LIMIT_RPS", 10)
 	viper.SetDefault("WEBHOOK_RATE_LIMIT_BURST", 20)
-	viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", "suno.ai,suno.com,audiopipe.suno.ai,cdn1.suno.ai,cdn2.suno.ai,kie.ai,cdn.kie.ai,storage.kie.ai,musicfile.kie.ai,amazonaws.com,cloudfront.net,s3.amazonaws.com,nanobananastorage.blob.core.windows.net,aiquickdraw.com")
+	viper.SetDefault("WEBHOOK_ALLOWED_HOSTS", "suno.ai,suno.com,audiopipe.suno.ai,cdn1.suno.ai,cdn2.suno.ai,kie.ai,cdn.kie.ai,storage.kie.ai,musicfile.kie.ai,s3.amazonaws.com,s3.us-east-1.amazonaws.com,s3.us-west-2.amazonaws.com,nanobananastorage.blob.core.windows.net,aiquickdraw.com")
 
 	// Parse JWT expiry duration
 	jwtExpiry, err := time.ParseDuration(viper.GetString("JWT_EXPIRY"))
@@ -174,6 +175,39 @@ func parseCommaSeparated(str string) []string {
 		}
 	}
 	return result
+}
+
+// Validate checks that all required configuration values are set.
+// Returns an error describing all missing/invalid values.
+func (c *Config) Validate() error {
+	var errs []string
+
+	if c.Database.URL == "" {
+		errs = append(errs, "DATABASE_URL is required")
+	}
+	if c.Redis.URL == "" {
+		errs = append(errs, "REDIS_URL is required")
+	}
+	if c.JWT.Secret == "" {
+		errs = append(errs, "JWT_SECRET is required")
+	} else if len(c.JWT.Secret) < 32 {
+		errs = append(errs, "JWT_SECRET must be at least 32 characters")
+	}
+	if c.Crypto.EncryptionKey == "" {
+		errs = append(errs, "ENCRYPTION_KEY is required")
+	}
+
+	// Webhook secret is required in production/staging
+	if c.IsProduction() || c.IsStaging() {
+		if c.Webhook.Secret == "" {
+			errs = append(errs, "WEBHOOK_SECRET is required in production/staging")
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config validation failed:\n  - %s", strings.Join(errs, "\n  - "))
+	}
+	return nil
 }
 
 // IsDevelopment returns true if the environment is development.

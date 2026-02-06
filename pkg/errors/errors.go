@@ -82,6 +82,14 @@ func NewNotFound(message string) *AppError {
 	}
 }
 
+// NewConflict creates a new AppError with HTTP 409 Conflict status.
+func NewConflict(message string) *AppError {
+	return &AppError{
+		Code:    http.StatusConflict,
+		Message: message,
+	}
+}
+
 // NewInternalError creates a new AppError with HTTP 500 Internal Server Error status.
 // The original error is wrapped for debugging purposes.
 func NewInternalError(err error) *AppError {

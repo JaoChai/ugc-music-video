@@ -151,6 +151,10 @@ func (s *jobService) Cancel(ctx context.Context, userID uuid.UUID, jobID uuid.UU
 		if errors.Is(err, repository.ErrJobNotFound) {
 			return apperrors.NewNotFound("job not found")
 		}
+		if errors.Is(err, repository.ErrStatusConflict) {
+			// Job reached terminal state between our check and the update
+			return apperrors.NewBadRequest("cannot cancel a job that is already completed or failed")
+		}
 		s.logger.Error("failed to cancel job",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -190,22 +194,10 @@ func (s *jobService) UpdateStatus(ctx context.Context, jobID uuid.UUID, status s
 
 // UpdateSongPrompt updates the song prompt for a job.
 func (s *jobService) UpdateSongPrompt(ctx context.Context, jobID uuid.UUID, prompt *models.SongPrompt) error {
-	job, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		if errors.Is(err, repository.ErrJobNotFound) {
-			return apperrors.NewNotFound("job not found")
+	if err := s.jobRepo.UpdateSongPromptAtomic(ctx, jobID, models.StatusAnalyzing, prompt, models.StatusGeneratingMusic); err != nil {
+		if errors.Is(err, repository.ErrStatusConflict) {
+			return apperrors.NewConflict("job status conflict: concurrent modification detected")
 		}
-		s.logger.Error("failed to get job for song prompt update",
-			zap.Error(err),
-			zap.String("job_id", jobID.String()),
-		)
-		return apperrors.NewInternalError(err)
-	}
-
-	job.SongPrompt = prompt
-	job.Status = models.StatusGeneratingMusic
-
-	if err := s.jobRepo.Update(ctx, job); err != nil {
 		s.logger.Error("failed to update song prompt",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -222,23 +214,10 @@ func (s *jobService) UpdateSongPrompt(ctx context.Context, jobID uuid.UUID, prom
 
 // UpdateGeneratedSongs updates the generated songs and task ID for a job.
 func (s *jobService) UpdateGeneratedSongs(ctx context.Context, jobID uuid.UUID, taskID string, songs []models.GeneratedSong) error {
-	job, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		if errors.Is(err, repository.ErrJobNotFound) {
-			return apperrors.NewNotFound("job not found")
+	if err := s.jobRepo.UpdateGeneratedSongsAtomic(ctx, jobID, models.StatusGeneratingMusic, taskID, songs, models.StatusSelectingSong); err != nil {
+		if errors.Is(err, repository.ErrStatusConflict) {
+			return apperrors.NewConflict("job status conflict: concurrent modification detected")
 		}
-		s.logger.Error("failed to get job for generated songs update",
-			zap.Error(err),
-			zap.String("job_id", jobID.String()),
-		)
-		return apperrors.NewInternalError(err)
-	}
-
-	job.SunoTaskID = &taskID
-	job.GeneratedSongs = songs
-	job.Status = models.StatusSelectingSong
-
-	if err := s.jobRepo.Update(ctx, job); err != nil {
 		s.logger.Error("failed to update generated songs",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -257,23 +236,10 @@ func (s *jobService) UpdateGeneratedSongs(ctx context.Context, jobID uuid.UUID, 
 
 // UpdateSelectedSong updates the selected song ID and audio URL.
 func (s *jobService) UpdateSelectedSong(ctx context.Context, jobID uuid.UUID, songID string, audioURL string) error {
-	job, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		if errors.Is(err, repository.ErrJobNotFound) {
-			return apperrors.NewNotFound("job not found")
+	if err := s.jobRepo.UpdateSelectedSongAtomic(ctx, jobID, models.StatusSelectingSong, songID, audioURL, models.StatusGeneratingImage); err != nil {
+		if errors.Is(err, repository.ErrStatusConflict) {
+			return apperrors.NewConflict("job status conflict: concurrent modification detected")
 		}
-		s.logger.Error("failed to get job for selected song update",
-			zap.Error(err),
-			zap.String("job_id", jobID.String()),
-		)
-		return apperrors.NewInternalError(err)
-	}
-
-	job.SelectedSongID = &songID
-	job.AudioURL = &audioURL
-	job.Status = models.StatusGeneratingImage
-
-	if err := s.jobRepo.Update(ctx, job); err != nil {
 		s.logger.Error("failed to update selected song",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -291,21 +257,10 @@ func (s *jobService) UpdateSelectedSong(ctx context.Context, jobID uuid.UUID, so
 
 // UpdateImagePrompt updates the image prompt for a job.
 func (s *jobService) UpdateImagePrompt(ctx context.Context, jobID uuid.UUID, prompt *models.ImagePrompt) error {
-	job, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		if errors.Is(err, repository.ErrJobNotFound) {
-			return apperrors.NewNotFound("job not found")
+	if err := s.jobRepo.UpdateImagePromptAtomic(ctx, jobID, models.StatusGeneratingImage, prompt); err != nil {
+		if errors.Is(err, repository.ErrStatusConflict) {
+			return apperrors.NewConflict("job status conflict: concurrent modification detected")
 		}
-		s.logger.Error("failed to get job for image prompt update",
-			zap.Error(err),
-			zap.String("job_id", jobID.String()),
-		)
-		return apperrors.NewInternalError(err)
-	}
-
-	job.ImagePrompt = prompt
-
-	if err := s.jobRepo.Update(ctx, job); err != nil {
 		s.logger.Error("failed to update image prompt",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -322,23 +277,10 @@ func (s *jobService) UpdateImagePrompt(ctx context.Context, jobID uuid.UUID, pro
 
 // UpdateImageURL updates the image URL and task ID for a job.
 func (s *jobService) UpdateImageURL(ctx context.Context, jobID uuid.UUID, taskID string, imageURL string) error {
-	job, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		if errors.Is(err, repository.ErrJobNotFound) {
-			return apperrors.NewNotFound("job not found")
+	if err := s.jobRepo.UpdateImageURLAtomic(ctx, jobID, models.StatusGeneratingImage, taskID, imageURL, models.StatusProcessingVideo); err != nil {
+		if errors.Is(err, repository.ErrStatusConflict) {
+			return apperrors.NewConflict("job status conflict: concurrent modification detected")
 		}
-		s.logger.Error("failed to get job for image URL update",
-			zap.Error(err),
-			zap.String("job_id", jobID.String()),
-		)
-		return apperrors.NewInternalError(err)
-	}
-
-	job.NanoTaskID = &taskID
-	job.ImageURL = &imageURL
-	job.Status = models.StatusProcessingVideo
-
-	if err := s.jobRepo.Update(ctx, job); err != nil {
 		s.logger.Error("failed to update image URL",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -356,22 +298,10 @@ func (s *jobService) UpdateImageURL(ctx context.Context, jobID uuid.UUID, taskID
 
 // UpdateVideoURL updates the video URL for a job.
 func (s *jobService) UpdateVideoURL(ctx context.Context, jobID uuid.UUID, videoURL string) error {
-	job, err := s.jobRepo.GetByID(ctx, jobID)
-	if err != nil {
-		if errors.Is(err, repository.ErrJobNotFound) {
-			return apperrors.NewNotFound("job not found")
+	if err := s.jobRepo.UpdateVideoURLAtomic(ctx, jobID, models.StatusProcessingVideo, videoURL, models.StatusUploading); err != nil {
+		if errors.Is(err, repository.ErrStatusConflict) {
+			return apperrors.NewConflict("job status conflict: concurrent modification detected")
 		}
-		s.logger.Error("failed to get job for video URL update",
-			zap.Error(err),
-			zap.String("job_id", jobID.String()),
-		)
-		return apperrors.NewInternalError(err)
-	}
-
-	job.VideoURL = &videoURL
-	job.Status = models.StatusUploading
-
-	if err := s.jobRepo.Update(ctx, job); err != nil {
 		s.logger.Error("failed to update video URL",
 			zap.Error(err),
 			zap.String("job_id", jobID.String()),
@@ -387,10 +317,20 @@ func (s *jobService) UpdateVideoURL(ctx context.Context, jobID uuid.UUID, videoU
 }
 
 // MarkFailed marks a job as failed with an error message.
+// If the job is already in a terminal state (completed/failed), this is a no-op.
 func (s *jobService) MarkFailed(ctx context.Context, jobID uuid.UUID, errorMessage string) error {
 	if err := s.jobRepo.UpdateWithError(ctx, jobID, errorMessage); err != nil {
 		if errors.Is(err, repository.ErrJobNotFound) {
 			return apperrors.NewNotFound("job not found")
+		}
+		if errors.Is(err, repository.ErrStatusConflict) {
+			// Job is already in a terminal state — this is expected when
+			// concurrent callbacks race or a late failure arrives after completion.
+			s.logger.Warn("attempted to mark terminal job as failed (ignored)",
+				zap.String("job_id", jobID.String()),
+				zap.String("error_message", errorMessage),
+			)
+			return nil
 		}
 		s.logger.Error("failed to mark job as failed",
 			zap.Error(err),
@@ -408,10 +348,18 @@ func (s *jobService) MarkFailed(ctx context.Context, jobID uuid.UUID, errorMessa
 }
 
 // MarkCompleted marks a job as completed.
+// If the job is already in a terminal state, this is a no-op.
 func (s *jobService) MarkCompleted(ctx context.Context, jobID uuid.UUID) error {
 	if err := s.jobRepo.UpdateStatus(ctx, jobID, models.StatusCompleted); err != nil {
 		if errors.Is(err, repository.ErrJobNotFound) {
 			return apperrors.NewNotFound("job not found")
+		}
+		if errors.Is(err, repository.ErrStatusConflict) {
+			// Job is already in a terminal state — idempotent
+			s.logger.Warn("attempted to mark terminal job as completed (ignored)",
+				zap.String("job_id", jobID.String()),
+			)
+			return nil
 		}
 		s.logger.Error("failed to mark job as completed",
 			zap.Error(err),

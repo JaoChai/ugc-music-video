@@ -1,22 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/axios'
+import type { ApiResponse } from '@/types'
 import type { Job, CreateJobRequest } from './types'
-
-// API Response types (matching Go backend)
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: {
-    code: number
-    message: string
-  }
-  meta?: {
-    page: number
-    per_page: number
-    total: number
-    total_pages: number
-  }
-}
 
 // Query keys
 export const jobKeys = {

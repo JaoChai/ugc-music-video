@@ -6,6 +6,7 @@ interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
+  _hasHydrated: boolean
   setUser: (user: User | null) => void
   setToken: (token: string | null) => void
   login: (user: User, token: string) => void
@@ -19,33 +20,32 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      _hasHydrated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      setToken: (token) => {
-        if (token) {
-          localStorage.setItem('auth_token', token)
-        } else {
-          localStorage.removeItem('auth_token')
-        }
-        set({ token })
-      },
+      setToken: (token) => set({ token }),
       login: (user, token) => {
-        localStorage.setItem('auth_token', token)
         set({ user, token, isAuthenticated: true })
       },
       logout: () => {
-        localStorage.removeItem('auth_token')
         set({ user: null, token: null, isAuthenticated: false })
       },
       isAdmin: () => get().user?.role === 'admin',
     }),
     {
       name: 'auth-storage',
-      // Persist isAuthenticated so we don't need hydration tracking
       partialize: (state) => ({
         user: state.user,
         token: state.token,
-        isAuthenticated: state.isAuthenticated
+        isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => {
+        return (_state, _error) => {
+          // Cleanup legacy localStorage key from dual-write pattern
+          localStorage.removeItem('auth_token')
+          // Mark hydration as complete
+          useAuthStore.setState({ _hasHydrated: true })
+        }
+      },
     }
   )
 )

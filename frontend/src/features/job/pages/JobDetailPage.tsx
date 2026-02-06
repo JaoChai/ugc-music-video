@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useJob, useCancelJob } from '../api'
 import { JobStatusBadge, JobProgressTimeline, VideoPlayer, DownloadButton } from '../components'
-import { TERMINAL_STATUSES } from '../types'
+import { TERMINAL_STATUSES, inferFailedAtStatus } from '../types'
 
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -286,7 +286,10 @@ export default function JobDetailPage() {
                 )}
               </CardHeader>
               <CardContent>
-                <JobProgressTimeline currentStatus={currentJob.status} />
+                <JobProgressTimeline
+                  currentStatus={currentJob.status}
+                  failedAtStatus={currentJob.status === 'failed' ? inferFailedAtStatus(currentJob) : undefined}
+                />
               </CardContent>
             </Card>
 

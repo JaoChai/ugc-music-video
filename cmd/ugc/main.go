@@ -35,6 +35,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	// Setup zap logger
 	logger, err := setupLogger(cfg)
 	if err != nil {
@@ -93,9 +99,6 @@ func main() {
 	}
 
 	// Create crypto service (required for API keys encryption)
-	if cfg.Crypto.EncryptionKey == "" {
-		logger.Fatal("ENCRYPTION_KEY is required - generate with: openssl rand -base64 32")
-	}
 	cryptoService, err := service.NewCryptoService(cfg.Crypto.EncryptionKey)
 	if err != nil {
 		logger.Fatal("failed to create crypto service", zap.Error(err))
@@ -306,8 +309,9 @@ func setupRouter(
 
 		// Webhook authentication middleware
 		webhookAuthMiddleware := middleware.WebhookAuthMiddleware(middleware.WebhookAuthConfig{
-			Secret: cfg.Webhook.Secret,
-			Logger: logger,
+			Secret:      cfg.Webhook.Secret,
+			Environment: cfg.Server.Env,
+			Logger:      logger,
 		})
 
 		webhookHandler.RegisterRoutes(v1, rateLimitMiddleware, webhookAuthMiddleware)
