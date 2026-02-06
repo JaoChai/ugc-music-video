@@ -39,6 +39,8 @@ type AuthService interface {
 	ValidateToken(token string) (*Claims, error)
 	RefreshToken(token string) (string, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
+	GenerateShortToken(userID uuid.UUID, expiry time.Duration) (string, error)
+	ValidateShortToken(tokenString string) (uuid.UUID, error)
 }
 
 // authService implements AuthService
@@ -209,6 +211,44 @@ func (s *authService) GetUserByID(ctx context.Context, id uuid.UUID) (*models.Us
 	}
 
 	return user, nil
+}
+
+// GenerateShortToken creates a short-lived JWT for OAuth state parameter (CSRF protection).
+func (s *authService) GenerateShortToken(userID uuid.UUID, expiry time.Duration) (string, error) {
+	now := time.Now()
+	claims := &Claims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(expiry)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Subject:   userID.String(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.jwtSecret))
+}
+
+// ValidateShortToken validates a short-lived JWT and returns the user ID.
+func (s *authService) ValidateShortToken(tokenString string) (uuid.UUID, error) {
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(s.jwtSecret), nil
+	})
+
+	if err != nil {
+		return uuid.Nil, ErrInvalidToken
+	}
+
+	if !token.Valid {
+		return uuid.Nil, ErrInvalidToken
+	}
+
+	return claims.UserID, nil
 }
 
 // generateToken creates a new JWT token for the given user

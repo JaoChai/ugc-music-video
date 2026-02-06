@@ -40,4 +40,13 @@ export const settingsApi = {
     const response = await api.post<{ data: TestConnectionResponse }>('/api/v1/auth/test-kie')
     return response.data.data
   },
+
+  getYouTubeConnectURL: async (): Promise<string> => {
+    const response = await api.get<{ data: { auth_url: string } }>('/api/v1/auth/youtube/connect')
+    return response.data.data.auth_url
+  },
+
+  disconnectYouTube: async (): Promise<void> => {
+    await api.delete('/api/v1/auth/youtube')
+  },
 }

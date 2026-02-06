@@ -42,6 +42,7 @@ export interface ApiError {
 export interface APIKeysStatus {
   has_openrouter_key: boolean
   has_kie_key: boolean
+  has_youtube: boolean
 }
 
 export interface UpdateAPIKeysInput {

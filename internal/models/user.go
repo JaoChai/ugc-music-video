@@ -16,11 +16,12 @@ type User struct {
 	OpenRouterModel    string    `json:"openrouter_model" gorm:"default:''"`
 	OpenRouterAPIKey   *string   `json:"-"` // Encrypted, never expose in JSON
 	KIEAPIKey          *string   `json:"-"` // Encrypted, never expose in JSON
-	SongConceptPrompt  *string   `json:"-" gorm:"column:song_concept_prompt"`  // Custom system prompt
-	SongSelectorPrompt *string   `json:"-" gorm:"column:song_selector_prompt"` // Custom system prompt
-	ImageConceptPrompt *string   `json:"-" gorm:"column:image_concept_prompt"` // Custom system prompt
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	SongConceptPrompt   *string   `json:"-" gorm:"column:song_concept_prompt"`  // Custom system prompt
+	SongSelectorPrompt  *string   `json:"-" gorm:"column:song_selector_prompt"` // Custom system prompt
+	ImageConceptPrompt  *string   `json:"-" gorm:"column:image_concept_prompt"` // Custom system prompt
+	YouTubeRefreshToken *string   `json:"-"`                                    // Encrypted, never expose in JSON
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // CreateUserInput represents the input for user registration
@@ -52,6 +53,7 @@ type UpdateAPIKeysInput struct {
 type APIKeysStatusResponse struct {
 	HasOpenRouterKey bool `json:"has_openrouter_key"`
 	HasKIEKey        bool `json:"has_kie_key"`
+	HasYouTube       bool `json:"has_youtube"`
 }
 
 // UserResponse represents the user data returned in API responses

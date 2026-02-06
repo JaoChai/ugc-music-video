@@ -15,6 +15,7 @@ const statusStyles: Record<JobStatus, string> = {
   generating_image: 'bg-zinc-100 text-zinc-800',
   processing_video: 'bg-zinc-100 text-zinc-800',
   uploading: 'bg-zinc-100 text-zinc-800',
+  uploading_youtube: 'bg-red-100 text-red-800',
   completed: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
 }
@@ -27,6 +28,7 @@ const animatedStatuses: JobStatus[] = [
   'generating_image',
   'processing_video',
   'uploading',
+  'uploading_youtube',
 ]
 
 export function JobStatusBadge({ status, className }: JobStatusBadgeProps) {

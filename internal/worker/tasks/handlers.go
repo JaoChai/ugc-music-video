@@ -4,6 +4,7 @@ package tasks
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/jaochai/ugc/internal/external/kie"
 	"github.com/jaochai/ugc/internal/external/openrouter"
 	"github.com/jaochai/ugc/internal/external/r2"
+	ytclient "github.com/jaochai/ugc/internal/external/youtube"
 	"github.com/jaochai/ugc/internal/ffmpeg"
 	"github.com/jaochai/ugc/internal/models"
 	"github.com/jaochai/ugc/internal/repository"
@@ -34,6 +36,7 @@ type Dependencies struct {
 	CryptoService    CryptoService
 	R2Client         *r2.Client
 	FFmpegProcessor  *ffmpeg.Processor
+	YouTubeClient    *ytclient.Client
 	AsynqClient      *asynq.Client
 	Logger           *zap.Logger
 	WebhookBaseURL   string // Base URL for webhooks, empty to disable
@@ -793,11 +796,44 @@ func HandleUploadAssets(deps *Dependencies) asynq.HandlerFunc {
 			videoURL = presignedURL
 		}
 
-		// Update job with video URL and mark as completed
+		// Update job with video URL
 		job.VideoURL = &videoURL
-		job.Status = models.StatusCompleted
 		if err := deps.JobRepo.Update(ctx, job); err != nil {
 			logger.Error("failed to update job with video url", zap.Error(err))
+			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to update job: %v", err))
+		}
+
+		// Check if user has YouTube connected — if so, enqueue YouTube upload
+		if deps.YouTubeClient != nil {
+			ytToken, err := deps.UserRepo.GetYouTubeToken(ctx, job.UserID)
+			if err != nil {
+				logger.Warn("failed to check YouTube token, skipping YouTube upload", zap.Error(err))
+			} else if ytToken != nil && *ytToken != "" {
+				// User has YouTube connected — transition to uploading_youtube
+				if err := deps.JobRepo.UpdateStatus(ctx, payload.JobID, models.StatusUploadingYouTube); err != nil {
+					logger.Warn("failed to set uploading_youtube status", zap.Error(err))
+				}
+
+				nextPayload, _ := (&TaskPayload{JobID: payload.JobID}).Marshal()
+				nextTask := asynq.NewTask(TypeUploadYouTube, nextPayload)
+				if _, err := deps.AsynqClient.Enqueue(nextTask); err != nil {
+					logger.Error("failed to enqueue YouTube upload task", zap.Error(err))
+					// YouTube enqueue failure should NOT fail the job — mark completed with error note
+					ytErr := fmt.Sprintf("failed to enqueue YouTube upload: %v", err)
+					job.YouTubeError = &ytErr
+					job.Status = models.StatusCompleted
+					_ = deps.JobRepo.Update(ctx, job)
+				} else {
+					logger.Info("enqueued YouTube upload task")
+				}
+				return nil
+			}
+		}
+
+		// No YouTube — mark completed directly
+		job.Status = models.StatusCompleted
+		if err := deps.JobRepo.Update(ctx, job); err != nil {
+			logger.Error("failed to mark job completed", zap.Error(err))
 			return markJobFailed(ctx, deps, payload.JobID, fmt.Sprintf("failed to update job: %v", err))
 		}
 
@@ -805,6 +841,119 @@ func HandleUploadAssets(deps *Dependencies) asynq.HandlerFunc {
 			zap.String("video_url", videoURL),
 		)
 
+		return nil
+	}
+}
+
+// HandleUploadYouTube creates a handler for the YouTube upload task.
+// This handler:
+// 1. Loads the job (must have video_url)
+// 2. Gets user's YouTube refresh token
+// 3. Downloads video from R2 URL
+// 4. Uploads to YouTube with privacy=unlisted
+// 5. Updates job with youtube_url/youtube_video_id or youtube_error
+// 6. Always marks job as completed (YouTube failure does NOT fail the job)
+func HandleUploadYouTube(deps *Dependencies) asynq.HandlerFunc {
+	return func(ctx context.Context, task *asynq.Task) error {
+		logger := deps.Logger.With(zap.String("task_type", TypeUploadYouTube))
+
+		// Parse payload
+		payload, err := UnmarshalTaskPayload(task.Payload())
+		if err != nil {
+			logger.Error("failed to unmarshal task payload", zap.Error(err))
+			return fmt.Errorf("failed to unmarshal payload: %w", err)
+		}
+
+		logger = logger.With(zap.String("job_id", payload.JobID.String()))
+		logger.Info("starting YouTube upload task")
+
+		// Load job
+		job, err := deps.JobRepo.GetByID(ctx, payload.JobID)
+		if err != nil {
+			logger.Error("failed to load job", zap.Error(err))
+			return nil // Don't retry — job is already completed on R2
+		}
+
+		// Verify video URL exists
+		if job.VideoURL == nil || *job.VideoURL == "" {
+			logger.Error("job missing video_url")
+			ytErr := "job missing video_url for YouTube upload"
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil
+		}
+
+		// Get user's YouTube refresh token
+		encToken, err := deps.UserRepo.GetYouTubeToken(ctx, job.UserID)
+		if err != nil || encToken == nil || *encToken == "" {
+			logger.Warn("user has no YouTube token, skipping")
+			ytErr := "YouTube not connected"
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil
+		}
+
+		// Decrypt the refresh token
+		refreshToken, err := deps.CryptoService.Decrypt(*encToken)
+		if err != nil {
+			logger.Error("failed to decrypt YouTube refresh token", zap.Error(err))
+			ytErr := "failed to decrypt YouTube credentials"
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil
+		}
+
+		// Download video from R2 public URL via HTTP
+		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, *job.VideoURL, nil)
+		if err != nil {
+			logger.Error("failed to create download request", zap.Error(err))
+			ytErr := fmt.Sprintf("failed to create download request: %v", err)
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil
+		}
+
+		httpResp, err := http.DefaultClient.Do(httpReq)
+		if err != nil {
+			logger.Error("failed to download video for YouTube upload", zap.Error(err))
+			ytErr := fmt.Sprintf("failed to download video: %v", err)
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil
+		}
+		defer httpResp.Body.Close()
+
+		if httpResp.StatusCode != http.StatusOK {
+			logger.Error("video download returned non-200 status", zap.Int("status", httpResp.StatusCode))
+			ytErr := fmt.Sprintf("video download failed with status %d", httpResp.StatusCode)
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil
+		}
+
+		// Build title from song prompt or concept
+		title := job.Concept
+		if job.SongPrompt != nil && job.SongPrompt.Title != "" {
+			title = job.SongPrompt.Title
+		}
+		if len(title) > 100 {
+			title = title[:97] + "..."
+		}
+
+		// Upload to YouTube
+		result, err := deps.YouTubeClient.UploadVideo(ctx, refreshToken, ytclient.UploadInput{
+			Title:       title,
+			Description: fmt.Sprintf("AI-generated music video\nConcept: %s", job.Concept),
+			VideoReader: httpResp.Body,
+		})
+		if err != nil {
+			logger.Error("YouTube upload failed", zap.Error(err))
+			ytErr := fmt.Sprintf("YouTube upload failed: %v", err)
+			_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, nil, nil, &ytErr, models.StatusCompleted)
+			return nil // Don't return error — job is still completed
+		}
+
+		// Success — update job with YouTube URL
+		logger.Info("YouTube upload successful",
+			zap.String("video_id", result.VideoID),
+			zap.String("youtube_url", result.VideoURL),
+		)
+
+		_ = deps.JobRepo.UpdateYouTubeResult(ctx, payload.JobID, &result.VideoURL, &result.VideoID, nil, models.StatusCompleted)
 		return nil
 	}
 }

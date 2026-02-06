@@ -30,6 +30,7 @@ type JobService interface {
 	UpdateVideoURL(ctx context.Context, jobID uuid.UUID, videoURL string) error
 	MarkFailed(ctx context.Context, jobID uuid.UUID, errorMessage string) error
 	MarkCompleted(ctx context.Context, jobID uuid.UUID) error
+	UpdateYouTubeResult(ctx context.Context, jobID uuid.UUID, youtubeURL, youtubeVideoID, youtubeError *string) error
 }
 
 // jobService implements JobService.
@@ -369,6 +370,26 @@ func (s *jobService) MarkCompleted(ctx context.Context, jobID uuid.UUID) error {
 	}
 
 	s.logger.Info("job completed",
+		zap.String("job_id", jobID.String()),
+	)
+
+	return nil
+}
+
+// UpdateYouTubeResult updates the YouTube upload result for a job and marks it completed.
+func (s *jobService) UpdateYouTubeResult(ctx context.Context, jobID uuid.UUID, youtubeURL, youtubeVideoID, youtubeError *string) error {
+	if err := s.jobRepo.UpdateYouTubeResult(ctx, jobID, youtubeURL, youtubeVideoID, youtubeError, models.StatusCompleted); err != nil {
+		if errors.Is(err, repository.ErrJobNotFound) {
+			return apperrors.NewNotFound("job not found")
+		}
+		s.logger.Error("failed to update YouTube result",
+			zap.Error(err),
+			zap.String("job_id", jobID.String()),
+		)
+		return apperrors.NewInternalError(err)
+	}
+
+	s.logger.Info("YouTube result updated",
 		zap.String("job_id", jobID.String()),
 	)
 

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/jaochai/ugc/internal/external/r2"
+	"github.com/jaochai/ugc/internal/external/youtube"
 	"github.com/jaochai/ugc/internal/ffmpeg"
 	"github.com/jaochai/ugc/internal/repository"
 	"github.com/jaochai/ugc/internal/service"
@@ -26,6 +27,7 @@ const (
 	TypeGenerateImage   = tasks.TypeGenerateImage
 	TypeProcessVideo    = tasks.TypeProcessVideo
 	TypeUploadAssets    = tasks.TypeUploadAssets
+	TypeUploadYouTube   = tasks.TypeUploadYouTube
 )
 
 // TaskPayload is a generic payload for all task types.
@@ -41,6 +43,7 @@ type Dependencies struct {
 	CryptoService    service.CryptoService
 	R2Client         *r2.Client
 	FFmpegProcessor  *ffmpeg.Processor
+	YouTubeClient    *youtube.Client
 	AsynqClient      *asynq.Client
 	Logger           *zap.Logger
 	WebhookBaseURL   string // Base URL for webhooks, empty to use polling
@@ -103,6 +106,7 @@ func NewWorker(redisURL string, deps Dependencies, logger *zap.Logger) (*Worker,
 		CryptoService:    deps.CryptoService,
 		R2Client:         deps.R2Client,
 		FFmpegProcessor:  deps.FFmpegProcessor,
+		YouTubeClient:    deps.YouTubeClient,
 		AsynqClient:      deps.AsynqClient,
 		Logger:           deps.Logger,
 		WebhookBaseURL:   deps.WebhookBaseURL,
@@ -117,6 +121,7 @@ func NewWorker(redisURL string, deps Dependencies, logger *zap.Logger) (*Worker,
 	mux.HandleFunc(tasks.TypeGenerateImage, tasks.HandleGenerateImage(taskDeps))
 	mux.HandleFunc(tasks.TypeProcessVideo, tasks.HandleProcessVideo(taskDeps))
 	mux.HandleFunc(tasks.TypeUploadAssets, tasks.HandleUploadAssets(taskDeps))
+	mux.HandleFunc(tasks.TypeUploadYouTube, tasks.HandleUploadYouTube(taskDeps))
 
 	return &Worker{
 		server: server,

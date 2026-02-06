@@ -19,6 +19,11 @@ export function JobProgressTimeline({ currentStatus, failedAtStatus, className }
   const isFailed = currentStatus === 'failed'
   const failedAtIndex = failedAtStatus ? getStatusIndex(failedAtStatus) : -1
 
+  // Show uploading_youtube step only if the job has passed through or is at that step
+  const hasYouTubeStep = currentStatus === 'uploading_youtube' ||
+    currentIndex > getStatusIndex('uploading_youtube') ||
+    (isFailed && failedAtStatus === 'uploading_youtube')
+
   // Timeline steps (excluding pending, they're handled separately)
   const timelineSteps: { status: JobStatus; label: string }[] = [
     { status: 'analyzing', label: STATUS_DISPLAY_NAMES.analyzing },
@@ -27,6 +32,7 @@ export function JobProgressTimeline({ currentStatus, failedAtStatus, className }
     { status: 'generating_image', label: STATUS_DISPLAY_NAMES.generating_image },
     { status: 'processing_video', label: STATUS_DISPLAY_NAMES.processing_video },
     { status: 'uploading', label: STATUS_DISPLAY_NAMES.uploading },
+    ...(hasYouTubeStep ? [{ status: 'uploading_youtube' as JobStatus, label: STATUS_DISPLAY_NAMES.uploading_youtube }] : []),
     { status: 'completed', label: STATUS_DISPLAY_NAMES.completed },
   ]
 

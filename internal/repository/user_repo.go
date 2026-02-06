@@ -25,6 +25,8 @@ type UserRepository interface {
 	UpdateAPIKeys(ctx context.Context, userID uuid.UUID, openRouterKey, kieKey *string) error
 	GetAPIKeys(ctx context.Context, userID uuid.UUID) (openRouterKey, kieKey *string, err error)
 	DeleteAPIKeys(ctx context.Context, userID uuid.UUID) error
+	UpdateYouTubeToken(ctx context.Context, userID uuid.UUID, encryptedToken *string) error
+	GetYouTubeToken(ctx context.Context, userID uuid.UUID) (*string, error)
 }
 
 // userRepository implements UserRepository using pgx.
@@ -71,7 +73,7 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 // GetByID retrieves a user by their ID.
 func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, role, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
+		SELECT id, email, password_hash, name, role, openrouter_model, openrouter_api_key, kie_api_key, youtube_refresh_token, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -86,6 +88,7 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 		&user.OpenRouterModel,
 		&user.OpenRouterAPIKey,
 		&user.KIEAPIKey,
+		&user.YouTubeRefreshToken,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -103,7 +106,7 @@ func (r *userRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Use
 // GetByEmail retrieves a user by their email address.
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, role, openrouter_model, openrouter_api_key, kie_api_key, created_at, updated_at
+		SELECT id, email, password_hash, name, role, openrouter_model, openrouter_api_key, kie_api_key, youtube_refresh_token, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
@@ -118,6 +121,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.
 		&user.OpenRouterModel,
 		&user.OpenRouterAPIKey,
 		&user.KIEAPIKey,
+		&user.YouTubeRefreshToken,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -246,5 +250,42 @@ func (r *userRepository) DeleteAPIKeys(ctx context.Context, userID uuid.UUID) er
 	}
 
 	return nil
+}
+
+// UpdateYouTubeToken updates the encrypted YouTube refresh token for a user.
+// Pass nil to clear the token (disconnect).
+func (r *userRepository) UpdateYouTubeToken(ctx context.Context, userID uuid.UUID, encryptedToken *string) error {
+	query := `
+		UPDATE users
+		SET youtube_refresh_token = $2, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, userID, encryptedToken)
+	if err != nil {
+		return fmt.Errorf("failed to update YouTube token: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// GetYouTubeToken retrieves the encrypted YouTube refresh token for a user.
+func (r *userRepository) GetYouTubeToken(ctx context.Context, userID uuid.UUID) (*string, error) {
+	query := `SELECT youtube_refresh_token FROM users WHERE id = $1`
+
+	var token *string
+	err := r.db.Pool().QueryRow(ctx, query, userID).Scan(&token)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("failed to get YouTube token: %w", err)
+	}
+
+	return token, nil
 }
 

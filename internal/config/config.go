@@ -20,6 +20,7 @@ type Config struct {
 	Webhook    WebhookConfig
 	CORS       CORSConfig
 	Crypto     CryptoConfig
+	YouTube    YouTubeConfig
 }
 
 // CORSConfig holds CORS-related configuration.
@@ -81,6 +82,13 @@ type WebhookConfig struct {
 // CryptoConfig holds encryption-related configuration.
 type CryptoConfig struct {
 	EncryptionKey string // Base64-encoded 32-byte key for AES-256
+}
+
+// YouTubeConfig holds YouTube API configuration (optional).
+type YouTubeConfig struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURI  string
 }
 
 // Load reads configuration from environment variables and .env file.
@@ -150,6 +158,11 @@ func Load() (*Config, error) {
 		},
 		Crypto: CryptoConfig{
 			EncryptionKey: viper.GetString("ENCRYPTION_KEY"),
+		},
+		YouTube: YouTubeConfig{
+			ClientID:     viper.GetString("YOUTUBE_CLIENT_ID"),
+			ClientSecret: viper.GetString("YOUTUBE_CLIENT_SECRET"),
+			RedirectURI:  viper.GetString("YOUTUBE_REDIRECT_URI"),
 		},
 	}
 

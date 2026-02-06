@@ -8,6 +8,7 @@ export type JobStatus =
   | 'generating_image'
   | 'processing_video'
   | 'uploading'
+  | 'uploading_youtube'
   | 'completed'
   | 'failed'
 
@@ -49,6 +50,9 @@ export interface Job {
   audio_url?: string
   image_url?: string
   video_url?: string
+  youtube_url?: string
+  youtube_video_id?: string
+  youtube_error?: string
   error_message?: string
   created_at: string
   updated_at: string
@@ -68,6 +72,7 @@ export const STATUS_ORDER: JobStatus[] = [
   'generating_image',
   'processing_video',
   'uploading',
+  'uploading_youtube',
   'completed',
 ]
 
@@ -76,6 +81,7 @@ export const TERMINAL_STATUSES: JobStatus[] = ['completed', 'failed']
 
 // Infer which stage a job failed at based on populated fields
 export function inferFailedAtStatus(job: Job): JobStatus {
+  if (job.youtube_url || job.youtube_error) return 'uploading_youtube'
   if (job.video_url) return 'uploading'
   if (job.image_url) return 'processing_video'
   if (job.image_prompt) return 'generating_image'
@@ -93,6 +99,7 @@ export const STATUS_DISPLAY_NAMES: Record<JobStatus, string> = {
   generating_image: 'กำลังสร้างภาพ',
   processing_video: 'กำลังประมวลผลวิดีโอ',
   uploading: 'กำลังอัปโหลด',
+  uploading_youtube: 'กำลังอัปโหลด YouTube',
   completed: 'เสร็จสิ้น',
   failed: 'ล้มเหลว',
 }

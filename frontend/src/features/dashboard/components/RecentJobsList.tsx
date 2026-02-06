@@ -18,6 +18,7 @@ const statusStyles: Record<JobStatus, { bg: string; text: string; icon: typeof C
   generating_image: { bg: 'bg-indigo-100', text: 'text-indigo-700', icon: Loader2 },
   processing_video: { bg: 'bg-cyan-100', text: 'text-cyan-700', icon: Loader2 },
   uploading: { bg: 'bg-teal-100', text: 'text-teal-700', icon: Loader2 },
+  uploading_youtube: { bg: 'bg-red-100', text: 'text-red-700', icon: Loader2 },
   completed: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle2 },
   failed: { bg: 'bg-red-100', text: 'text-red-700', icon: AlertCircle },
 }
@@ -25,7 +26,7 @@ const statusStyles: Record<JobStatus, { bg: string; text: string; icon: typeof C
 function StatusBadge({ status }: { status: JobStatus }) {
   const style = statusStyles[status] || statusStyles.pending
   const Icon = style.icon
-  const isLoading = ['analyzing', 'generating_music', 'selecting_song', 'generating_image', 'processing_video', 'uploading'].includes(status)
+  const isLoading = ['analyzing', 'generating_music', 'selecting_song', 'generating_image', 'processing_video', 'uploading', 'uploading_youtube'].includes(status)
 
   return (
     <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium', style.bg, style.text)}>

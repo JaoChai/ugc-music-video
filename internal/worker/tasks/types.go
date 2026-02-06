@@ -13,8 +13,9 @@ const (
 	TypeGenerateMusic  = "job:generate_music"
 	TypeSelectSong     = "job:select_song"
 	TypeGenerateImage  = "job:generate_image"
-	TypeProcessVideo   = "job:process_video"
-	TypeUploadAssets   = "job:upload_assets"
+	TypeProcessVideo    = "job:process_video"
+	TypeUploadAssets    = "job:upload_assets"
+	TypeUploadYouTube   = "job:upload_youtube"
 )
 
 // TaskPayload represents the common payload for all job-related tasks.

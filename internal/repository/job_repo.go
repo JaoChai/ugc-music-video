@@ -40,6 +40,7 @@ type JobRepository interface {
 	UpdateImagePromptAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, prompt *models.ImagePrompt) error
 	UpdateImageURLAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, taskID string, imageURL string, newStatus string) error
 	UpdateVideoURLAtomic(ctx context.Context, id uuid.UUID, expectedStatus string, videoURL string, newStatus string) error
+	UpdateYouTubeResult(ctx context.Context, id uuid.UUID, youtubeURL, youtubeVideoID, youtubeError *string, newStatus string) error
 }
 
 // jobRepository implements JobRepository using PostgreSQL.
@@ -74,12 +75,14 @@ func (r *jobRepository) Create(ctx context.Context, job *models.Job) error {
 			id, user_id, status, concept, llm_model,
 			song_prompt, suno_task_id, generated_songs, selected_song_id,
 			image_prompt, nano_task_id, audio_url, image_url, video_url,
+			youtube_url, youtube_video_id, youtube_error,
 			error_message, created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5,
 			$6, $7, $8, $9,
 			$10, $11, $12, $13, $14,
-			$15, $16, $17
+			$15, $16, $17,
+			$18, $19, $20
 		)
 	`
 
@@ -105,6 +108,9 @@ func (r *jobRepository) Create(ctx context.Context, job *models.Job) error {
 		job.AudioURL,
 		job.ImageURL,
 		job.VideoURL,
+		job.YouTubeURL,
+		job.YouTubeVideoID,
+		job.YouTubeError,
 		job.ErrorMessage,
 		job.CreatedAt,
 		job.UpdatedAt,
@@ -123,6 +129,7 @@ func (r *jobRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Job,
 			id, user_id, status, concept, llm_model,
 			song_prompt, suno_task_id, generated_songs, selected_song_id,
 			image_prompt, nano_task_id, audio_url, image_url, video_url,
+			youtube_url, youtube_video_id, youtube_error,
 			error_message, created_at, updated_at
 		FROM jobs
 		WHERE id = $1
@@ -147,6 +154,7 @@ func (r *jobRepository) GetBySunoTaskID(ctx context.Context, taskID string) (*mo
 			id, user_id, status, concept, llm_model,
 			song_prompt, suno_task_id, generated_songs, selected_song_id,
 			image_prompt, nano_task_id, audio_url, image_url, video_url,
+			youtube_url, youtube_video_id, youtube_error,
 			error_message, created_at, updated_at
 		FROM jobs
 		WHERE suno_task_id = $1
@@ -171,6 +179,7 @@ func (r *jobRepository) GetByNanoTaskID(ctx context.Context, taskID string) (*mo
 			id, user_id, status, concept, llm_model,
 			song_prompt, suno_task_id, generated_songs, selected_song_id,
 			image_prompt, nano_task_id, audio_url, image_url, video_url,
+			youtube_url, youtube_video_id, youtube_error,
 			error_message, created_at, updated_at
 		FROM jobs
 		WHERE nano_task_id = $1
@@ -213,6 +222,7 @@ func (r *jobRepository) GetByUserID(ctx context.Context, userID uuid.UUID, page,
 			id, user_id, status, concept, llm_model,
 			song_prompt, suno_task_id, generated_songs, selected_song_id,
 			image_prompt, nano_task_id, audio_url, image_url, video_url,
+			youtube_url, youtube_video_id, youtube_error,
 			error_message, created_at, updated_at
 		FROM jobs
 		WHERE user_id = $1
@@ -273,8 +283,11 @@ func (r *jobRepository) Update(ctx context.Context, job *models.Job) error {
 			audio_url = $11,
 			image_url = $12,
 			video_url = $13,
-			error_message = $14,
-			updated_at = $15
+			youtube_url = $14,
+			youtube_video_id = $15,
+			youtube_error = $16,
+			error_message = $17,
+			updated_at = $18
 		WHERE id = $1
 	`
 
@@ -294,6 +307,9 @@ func (r *jobRepository) Update(ctx context.Context, job *models.Job) error {
 		job.AudioURL,
 		job.ImageURL,
 		job.VideoURL,
+		job.YouTubeURL,
+		job.YouTubeVideoID,
+		job.YouTubeError,
 		job.ErrorMessage,
 		job.UpdatedAt,
 	)
@@ -577,6 +593,9 @@ func scanJob(row pgx.Row) (*models.Job, error) {
 		&job.AudioURL,
 		&job.ImageURL,
 		&job.VideoURL,
+		&job.YouTubeURL,
+		&job.YouTubeVideoID,
+		&job.YouTubeError,
 		&job.ErrorMessage,
 		&job.CreatedAt,
 		&job.UpdatedAt,
@@ -613,6 +632,28 @@ func scanJob(row pgx.Row) (*models.Job, error) {
 	return &job, nil
 }
 
+// UpdateYouTubeResult updates YouTube-related fields and transitions to a new status.
+func (r *jobRepository) UpdateYouTubeResult(ctx context.Context, id uuid.UUID, youtubeURL, youtubeVideoID, youtubeError *string, newStatus string) error {
+	query := `
+		UPDATE jobs SET
+			youtube_url = $2,
+			youtube_video_id = $3,
+			youtube_error = $4,
+			status = $5,
+			updated_at = $6
+		WHERE id = $1
+	`
+
+	result, err := r.db.Pool().Exec(ctx, query, id, youtubeURL, youtubeVideoID, youtubeError, newStatus, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("failed to update YouTube result: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrJobNotFound
+	}
+	return nil
+}
+
 // scanJobFromRows scans a row from pgx.Rows into a Job struct.
 func scanJobFromRows(rows pgx.Rows) (*models.Job, error) {
 	var job models.Job
@@ -633,6 +674,9 @@ func scanJobFromRows(rows pgx.Rows) (*models.Job, error) {
 		&job.AudioURL,
 		&job.ImageURL,
 		&job.VideoURL,
+		&job.YouTubeURL,
+		&job.YouTubeVideoID,
+		&job.YouTubeError,
 		&job.ErrorMessage,
 		&job.CreatedAt,
 		&job.UpdatedAt,

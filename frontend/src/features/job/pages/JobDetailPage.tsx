@@ -248,6 +248,38 @@ export default function JobDetailPage() {
               </Card>
             )}
 
+            {/* YouTube Section */}
+            {(currentJob.youtube_url || currentJob.youtube_error) && (
+              <Card className={currentJob.youtube_error && !currentJob.youtube_url ? 'border-yellow-200 bg-yellow-50' : ''}>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Video className="h-5 w-5 text-red-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">YouTube</h2>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {currentJob.youtube_url && (
+                    <div>
+                      <a
+                        href={currentJob.youtube_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline text-sm break-all"
+                      >
+                        {currentJob.youtube_url}
+                      </a>
+                    </div>
+                  )}
+                  {currentJob.youtube_error && (
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
+                      <p className="text-sm text-yellow-700">{currentJob.youtube_error}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Video Section */}
             {currentJob.video_url && (
               <Card>

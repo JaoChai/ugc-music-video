@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/jaochai/ugc/internal/external/youtube"
 	"github.com/jaochai/ugc/internal/middleware"
 	"github.com/jaochai/ugc/internal/models"
 	"github.com/jaochai/ugc/internal/repository"
@@ -47,6 +48,7 @@ type AuthHandler struct {
 	userRepo         repository.UserRepository
 	systemPromptRepo repository.SystemPromptRepository
 	cryptoService    service.CryptoService
+	youtubeClient    *youtube.Client
 	logger           *zap.Logger
 }
 
@@ -56,6 +58,7 @@ func NewAuthHandler(
 	userRepo repository.UserRepository,
 	systemPromptRepo repository.SystemPromptRepository,
 	cryptoService service.CryptoService,
+	youtubeClient *youtube.Client,
 	logger *zap.Logger,
 ) *AuthHandler {
 	return &AuthHandler{
@@ -63,6 +66,7 @@ func NewAuthHandler(
 		userRepo:         userRepo,
 		systemPromptRepo: systemPromptRepo,
 		cryptoService:    cryptoService,
+		youtubeClient:    youtubeClient,
 		logger:           logger,
 	}
 }
@@ -86,7 +90,14 @@ func (h *AuthHandler) RegisterRoutes(rg *gin.RouterGroup) {
 			protected.DELETE("/api-keys", h.DeleteAPIKeys)
 			protected.POST("/test-openrouter", h.TestOpenRouterConnection)
 			protected.POST("/test-kie", h.TestKIEConnection)
+
+			// YouTube OAuth routes
+			protected.GET("/youtube/connect", h.YouTubeConnect)
+			protected.DELETE("/youtube", h.YouTubeDisconnect)
 		}
+
+		// YouTube OAuth callback (not protected — user redirected from Google)
+		auth.GET("/youtube/callback", h.YouTubeCallback)
 	}
 }
 
@@ -348,9 +359,19 @@ func (h *AuthHandler) GetAPIKeysStatus(c *gin.Context) {
 		}
 	}
 
+	// Check YouTube connection
+	hasYouTube := false
+	ytToken, err := h.userRepo.GetYouTubeToken(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Warn("failed to check YouTube token", zap.Error(err), zap.String("user_id", userID.String()))
+	} else if ytToken != nil && *ytToken != "" {
+		hasYouTube = true
+	}
+
 	response.Success(c, models.APIKeysStatusResponse{
 		HasOpenRouterKey: hasOpenRouterKey,
 		HasKIEKey:        hasKIEKey,
+		HasYouTube:       hasYouTube,
 	})
 }
 
@@ -743,6 +764,137 @@ func testKIEAPI(ctx context.Context, apiKey string, logger *zap.Logger) (bool, s
 			zap.String("body", string(body)))
 		return false, fmt.Sprintf("API error (status %d). Please try again later.", resp.StatusCode)
 	}
+}
+
+// YouTubeConnect initiates the YouTube OAuth2 flow.
+// Returns a URL the frontend should redirect the user to.
+func (h *AuthHandler) YouTubeConnect(c *gin.Context) {
+	if h.youtubeClient == nil {
+		response.BadRequest(c, "YouTube integration is not configured")
+		return
+	}
+
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	// Generate a short-lived JWT as the OAuth state parameter (CSRF protection)
+	state, err := h.authService.GenerateShortToken(userID, 10*time.Minute)
+	if err != nil {
+		h.logger.Error("failed to generate OAuth state token", zap.Error(err))
+		response.Error(c, errors.New("failed to initiate YouTube connection"))
+		return
+	}
+
+	authURL := h.youtubeClient.GetAuthURL(state)
+
+	response.Success(c, gin.H{
+		"auth_url": authURL,
+	})
+}
+
+// YouTubeCallback handles the OAuth2 callback from Google.
+// Exchanges the authorization code for a refresh token, encrypts it, and saves to DB.
+func (h *AuthHandler) YouTubeCallback(c *gin.Context) {
+	if h.youtubeClient == nil {
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=not_configured")
+		return
+	}
+
+	// Check for OAuth error from Google
+	if errParam := c.Query("error"); errParam != "" {
+		h.logger.Warn("YouTube OAuth error", zap.String("error", errParam))
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason="+errParam)
+		return
+	}
+
+	code := c.Query("code")
+	state := c.Query("state")
+
+	if code == "" || state == "" {
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=missing_params")
+		return
+	}
+
+	// Validate the state parameter (JWT) to extract userID and prevent CSRF
+	userID, err := h.authService.ValidateShortToken(state)
+	if err != nil {
+		h.logger.Warn("invalid YouTube OAuth state", zap.Error(err))
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=invalid_state")
+		return
+	}
+
+	// Exchange the authorization code for a refresh token
+	refreshToken, err := h.youtubeClient.ExchangeCode(c.Request.Context(), code)
+	if err != nil {
+		h.logger.Error("failed to exchange YouTube OAuth code", zap.Error(err), zap.String("user_id", userID.String()))
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=exchange_failed")
+		return
+	}
+
+	// Encrypt the refresh token
+	encrypted, err := h.cryptoService.Encrypt(refreshToken)
+	if err != nil {
+		h.logger.Error("failed to encrypt YouTube refresh token", zap.Error(err))
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=encryption_failed")
+		return
+	}
+
+	// Save to database
+	if err := h.userRepo.UpdateYouTubeToken(c.Request.Context(), userID, &encrypted); err != nil {
+		h.logger.Error("failed to save YouTube token", zap.Error(err), zap.String("user_id", userID.String()))
+		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=save_failed")
+		return
+	}
+
+	h.logger.Info("YouTube connected successfully", zap.String("user_id", userID.String()))
+	c.Redirect(http.StatusFound, "/settings?youtube=connected")
+}
+
+// YouTubeDisconnect revokes the YouTube OAuth token and removes it from DB.
+func (h *AuthHandler) YouTubeDisconnect(c *gin.Context) {
+	if h.youtubeClient == nil {
+		response.BadRequest(c, "YouTube integration is not configured")
+		return
+	}
+
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	// Get the encrypted token
+	encToken, err := h.userRepo.GetYouTubeToken(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Error("failed to get YouTube token", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, errors.New("failed to disconnect YouTube"))
+		return
+	}
+
+	// Revoke the token if it exists
+	if encToken != nil && *encToken != "" {
+		refreshToken, err := h.cryptoService.Decrypt(*encToken)
+		if err != nil {
+			h.logger.Warn("failed to decrypt YouTube token for revocation", zap.Error(err))
+		} else {
+			if err := h.youtubeClient.RevokeToken(c.Request.Context(), refreshToken); err != nil {
+				h.logger.Warn("failed to revoke YouTube token (continuing with disconnect)", zap.Error(err))
+			}
+		}
+	}
+
+	// Remove token from DB
+	if err := h.userRepo.UpdateYouTubeToken(c.Request.Context(), userID, nil); err != nil {
+		h.logger.Error("failed to remove YouTube token", zap.Error(err), zap.String("user_id", userID.String()))
+		response.Error(c, errors.New("failed to disconnect YouTube"))
+		return
+	}
+
+	h.logger.Info("YouTube disconnected", zap.String("user_id", userID.String()))
+	response.NoContent(c)
 }
 
 // maxPromptLength is the maximum allowed length for custom prompts

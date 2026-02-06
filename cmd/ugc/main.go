@@ -18,6 +18,7 @@ import (
 	"github.com/jaochai/ugc/internal/config"
 	"github.com/jaochai/ugc/internal/database"
 	"github.com/jaochai/ugc/internal/external/r2"
+	"github.com/jaochai/ugc/internal/external/youtube"
 	"github.com/jaochai/ugc/internal/ffmpeg"
 	"github.com/jaochai/ugc/internal/handler"
 	"github.com/jaochai/ugc/internal/middleware"
@@ -98,6 +99,15 @@ func main() {
 		logger.Warn("R2 not configured - video uploads will be disabled")
 	}
 
+	// Create YouTube client (optional - skip if not configured)
+	var youtubeClient *youtube.Client
+	if cfg.YouTube.ClientID != "" && cfg.YouTube.ClientSecret != "" {
+		youtubeClient = youtube.NewClient(cfg.YouTube.ClientID, cfg.YouTube.ClientSecret, cfg.YouTube.RedirectURI, logger)
+		logger.Info("YouTube client initialized")
+	} else {
+		logger.Warn("YouTube not configured - YouTube uploads will be disabled")
+	}
+
 	// Create crypto service (required for API keys encryption)
 	cryptoService, err := service.NewCryptoService(cfg.Crypto.EncryptionKey)
 	if err != nil {
@@ -144,6 +154,7 @@ func main() {
 		CryptoService:    cryptoService,
 		R2Client:         r2Client,
 		FFmpegProcessor:  ffmpegProcessor,
+		YouTubeClient:    youtubeClient,
 		AsynqClient:      asynqClient,
 		Logger:           logger,
 		WebhookBaseURL:   cfg.Webhook.BaseURL,
@@ -158,7 +169,7 @@ func main() {
 	}
 
 	// Setup Gin router
-	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, systemPromptRepo, cryptoService, asynqClient, redisClient, logger)
+	router := setupRouter(cfg, authService, jobService, jobRepo, userRepo, systemPromptRepo, cryptoService, youtubeClient, asynqClient, redisClient, logger)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -240,6 +251,7 @@ func setupRouter(
 	userRepo repository.UserRepository,
 	systemPromptRepo repository.SystemPromptRepository,
 	cryptoService service.CryptoService,
+	youtubeClient *youtube.Client,
 	asynqClient *asynq.Client,
 	redisClient *redis.Client,
 	logger *zap.Logger,
@@ -278,7 +290,7 @@ func setupRouter(
 	v1 := router.Group("/api/v1")
 	{
 		// Auth routes
-		authHandler := handler.NewAuthHandler(authService, userRepo, systemPromptRepo, cryptoService, logger)
+		authHandler := handler.NewAuthHandler(authService, userRepo, systemPromptRepo, cryptoService, youtubeClient, logger)
 		authHandler.RegisterRoutes(v1)
 
 		// Job routes (protected)

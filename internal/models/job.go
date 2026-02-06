@@ -15,9 +15,10 @@ const (
 	StatusSelectingSong   = "selecting_song"
 	StatusGeneratingImage = "generating_image"
 	StatusProcessingVideo = "processing_video"
-	StatusUploading       = "uploading"
-	StatusCompleted       = "completed"
-	StatusFailed          = "failed"
+	StatusUploading        = "uploading"
+	StatusUploadingYouTube = "uploading_youtube"
+	StatusCompleted        = "completed"
+	StatusFailed           = "failed"
 )
 
 // SongPrompt represents the output from Agent 1 (music prompt generation).
@@ -60,6 +61,9 @@ type Job struct {
 	AudioURL       *string         `json:"audio_url,omitempty" db:"audio_url"`
 	ImageURL       *string         `json:"image_url,omitempty" db:"image_url"`
 	VideoURL       *string         `json:"video_url,omitempty" db:"video_url"`
+	YouTubeURL     *string         `json:"youtube_url,omitempty" db:"youtube_url"`
+	YouTubeVideoID *string         `json:"youtube_video_id,omitempty" db:"youtube_video_id"`
+	YouTubeError   *string         `json:"youtube_error,omitempty" db:"youtube_error"`
 	ErrorMessage   *string         `json:"error_message,omitempty" db:"error_message"`
 	CreatedAt      time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at" db:"updated_at"`
@@ -85,6 +89,9 @@ type JobResponse struct {
 	AudioURL       *string         `json:"audio_url,omitempty"`
 	ImageURL       *string         `json:"image_url,omitempty"`
 	VideoURL       *string         `json:"video_url,omitempty"`
+	YouTubeURL     *string         `json:"youtube_url,omitempty"`
+	YouTubeVideoID *string         `json:"youtube_video_id,omitempty"`
+	YouTubeError   *string         `json:"youtube_error,omitempty"`
 	ErrorMessage   *string         `json:"error_message,omitempty"`
 	CreatedAt      time.Time       `json:"created_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
@@ -106,6 +113,9 @@ func (j *Job) ToResponse() *JobResponse {
 		AudioURL:       j.AudioURL,
 		ImageURL:       j.ImageURL,
 		VideoURL:       j.VideoURL,
+		YouTubeURL:     j.YouTubeURL,
+		YouTubeVideoID: j.YouTubeVideoID,
+		YouTubeError:   j.YouTubeError,
 		ErrorMessage:   j.ErrorMessage,
 		CreatedAt:      j.CreatedAt,
 		UpdatedAt:      j.UpdatedAt,
