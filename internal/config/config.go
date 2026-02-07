@@ -10,17 +10,18 @@ import (
 
 // Config holds all configuration for the application.
 type Config struct {
-	Server     ServerConfig
-	Database   DatabaseConfig
-	Redis      RedisConfig
-	JWT        JWTConfig
-	R2         R2Config
-	KIE        KIEConfig
-	OpenRouter OpenRouterConfig
-	Webhook    WebhookConfig
-	CORS       CORSConfig
-	Crypto     CryptoConfig
-	YouTube    YouTubeConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	Redis       RedisConfig
+	JWT         JWTConfig
+	R2          R2Config
+	KIE         KIEConfig
+	OpenRouter  OpenRouterConfig
+	Webhook     WebhookConfig
+	CORS        CORSConfig
+	Crypto      CryptoConfig
+	YouTube     YouTubeConfig
+	FrontendURL string // Frontend base URL for OAuth redirects (e.g. https://www.thinkclip.xyz)
 }
 
 // CORSConfig holds CORS-related configuration.
@@ -164,6 +165,7 @@ func Load() (*Config, error) {
 			ClientSecret: viper.GetString("YOUTUBE_CLIENT_SECRET"),
 			RedirectURI:  viper.GetString("YOUTUBE_REDIRECT_URI"),
 		},
+		FrontendURL: strings.TrimRight(viper.GetString("FRONTEND_URL"), "/"),
 	}
 
 	return cfg, nil

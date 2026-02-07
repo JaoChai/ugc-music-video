@@ -49,6 +49,7 @@ type AuthHandler struct {
 	systemPromptRepo repository.SystemPromptRepository
 	cryptoService    service.CryptoService
 	youtubeClient    *youtube.Client
+	frontendURL      string
 	logger           *zap.Logger
 }
 
@@ -59,6 +60,7 @@ func NewAuthHandler(
 	systemPromptRepo repository.SystemPromptRepository,
 	cryptoService service.CryptoService,
 	youtubeClient *youtube.Client,
+	frontendURL string,
 	logger *zap.Logger,
 ) *AuthHandler {
 	return &AuthHandler{
@@ -67,6 +69,7 @@ func NewAuthHandler(
 		systemPromptRepo: systemPromptRepo,
 		cryptoService:    cryptoService,
 		youtubeClient:    youtubeClient,
+		frontendURL:      frontendURL,
 		logger:           logger,
 	}
 }
@@ -795,18 +798,26 @@ func (h *AuthHandler) YouTubeConnect(c *gin.Context) {
 	})
 }
 
+// settingsRedirect builds a redirect URL to the frontend settings page.
+func (h *AuthHandler) settingsRedirect(query string) string {
+	if h.frontendURL != "" {
+		return h.frontendURL + "/settings?" + query
+	}
+	return "/settings?" + query
+}
+
 // YouTubeCallback handles the OAuth2 callback from Google.
 // Exchanges the authorization code for a refresh token, encrypts it, and saves to DB.
 func (h *AuthHandler) YouTubeCallback(c *gin.Context) {
 	if h.youtubeClient == nil {
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=not_configured")
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason=not_configured"))
 		return
 	}
 
 	// Check for OAuth error from Google
 	if errParam := c.Query("error"); errParam != "" {
 		h.logger.Warn("YouTube OAuth error", zap.String("error", errParam))
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason="+errParam)
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason="+errParam))
 		return
 	}
 
@@ -814,7 +825,7 @@ func (h *AuthHandler) YouTubeCallback(c *gin.Context) {
 	state := c.Query("state")
 
 	if code == "" || state == "" {
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=missing_params")
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason=missing_params"))
 		return
 	}
 
@@ -822,7 +833,7 @@ func (h *AuthHandler) YouTubeCallback(c *gin.Context) {
 	userID, err := h.authService.ValidateShortToken(state)
 	if err != nil {
 		h.logger.Warn("invalid YouTube OAuth state", zap.Error(err))
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=invalid_state")
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason=invalid_state"))
 		return
 	}
 
@@ -830,7 +841,7 @@ func (h *AuthHandler) YouTubeCallback(c *gin.Context) {
 	refreshToken, err := h.youtubeClient.ExchangeCode(c.Request.Context(), code)
 	if err != nil {
 		h.logger.Error("failed to exchange YouTube OAuth code", zap.Error(err), zap.String("user_id", userID.String()))
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=exchange_failed")
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason=exchange_failed"))
 		return
 	}
 
@@ -838,19 +849,19 @@ func (h *AuthHandler) YouTubeCallback(c *gin.Context) {
 	encrypted, err := h.cryptoService.Encrypt(refreshToken)
 	if err != nil {
 		h.logger.Error("failed to encrypt YouTube refresh token", zap.Error(err))
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=encryption_failed")
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason=encryption_failed"))
 		return
 	}
 
 	// Save to database
 	if err := h.userRepo.UpdateYouTubeToken(c.Request.Context(), userID, &encrypted); err != nil {
 		h.logger.Error("failed to save YouTube token", zap.Error(err), zap.String("user_id", userID.String()))
-		c.Redirect(http.StatusFound, "/settings?youtube=error&reason=save_failed")
+		c.Redirect(http.StatusFound, h.settingsRedirect("youtube=error&reason=save_failed"))
 		return
 	}
 
 	h.logger.Info("YouTube connected successfully", zap.String("user_id", userID.String()))
-	c.Redirect(http.StatusFound, "/settings?youtube=connected")
+	c.Redirect(http.StatusFound, h.settingsRedirect("youtube=connected"))
 }
 
 // YouTubeDisconnect revokes the YouTube OAuth token and removes it from DB.

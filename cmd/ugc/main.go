@@ -290,7 +290,7 @@ func setupRouter(
 	v1 := router.Group("/api/v1")
 	{
 		// Auth routes
-		authHandler := handler.NewAuthHandler(authService, userRepo, systemPromptRepo, cryptoService, youtubeClient, logger)
+		authHandler := handler.NewAuthHandler(authService, userRepo, systemPromptRepo, cryptoService, youtubeClient, cfg.FrontendURL, logger)
 		authHandler.RegisterRoutes(v1)
 
 		// Job routes (protected)
