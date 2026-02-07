@@ -26,6 +26,7 @@ type SongPrompt struct {
 	Prompt       string `json:"prompt"`
 	Style        string `json:"style"`
 	Title        string `json:"title"`
+	TitleEn      string `json:"title_en"`
 	Model        string `json:"model"`
 	Instrumental bool   `json:"instrumental"`
 }

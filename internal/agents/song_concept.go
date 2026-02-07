@@ -22,7 +22,8 @@ type SongConceptInput struct {
 type SongConceptOutput struct {
 	Prompt       string `json:"prompt"`       // Lyrics/description for Suno
 	Style        string `json:"style"`        // Music style (e.g., "pop ballad", "rock", "EDM")
-	Title        string `json:"title"`        // Song title
+	Title        string `json:"title"`        // Song title (Thai)
+	TitleEn      string `json:"title_en"`     // Song title (English translation)
 	Instrumental bool   `json:"instrumental"` // Whether the song should be instrumental
 }
 
@@ -33,6 +34,7 @@ func (o *SongConceptOutput) ToSongPrompt() *models.SongPrompt {
 		Prompt:       o.Prompt,
 		Style:        o.Style,
 		Title:        o.Title,
+		TitleEn:      o.TitleEn,
 		Model:        "V5", // Hardcoded - LLM cannot reliably select Suno model versions
 		Instrumental: o.Instrumental,
 	}

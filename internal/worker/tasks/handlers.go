@@ -922,19 +922,26 @@ func HandleUploadYouTube(deps *Dependencies) asynq.HandlerFunc {
 			return nil
 		}
 
-		// Build title from song prompt or concept
-		title := job.Concept
+		// Build YouTube title: "{Thai Title} ({English Title}) JaoPao | Official Music Audio"
+		songTitle := job.Concept
 		if job.SongPrompt != nil && job.SongPrompt.Title != "" {
-			title = job.SongPrompt.Title
+			songTitle = job.SongPrompt.Title
+			if job.SongPrompt.TitleEn != "" {
+				songTitle = fmt.Sprintf("%s (%s)", job.SongPrompt.Title, job.SongPrompt.TitleEn)
+			}
 		}
+		title := fmt.Sprintf("%s JaoPao | Official Music Audio", songTitle)
 		if len(title) > 100 {
 			title = title[:97] + "..."
 		}
 
+		// Fixed YouTube description
+		description := "Spotify ค้นได้เลยพิมว่า : เจ้าเปา  ได้เลยนะงับ\n\nฝากคุณพี่ทุกท่านติดตาม เจ้าเปา (JaoPao) ได้ที่  Tiktok \n\nจิ้มเบาๆที่นี้นะคร๊าฟ :   https://www.tiktok.com/@jaopaodogsong"
+
 		// Upload to YouTube
 		result, err := deps.YouTubeClient.UploadVideo(ctx, refreshToken, ytclient.UploadInput{
 			Title:       title,
-			Description: fmt.Sprintf("AI-generated music video\nConcept: %s", job.Concept),
+			Description: description,
 			VideoReader: httpResp.Body,
 		})
 		if err != nil {
