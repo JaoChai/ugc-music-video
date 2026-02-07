@@ -40,9 +40,8 @@ type GeneratedSong struct {
 
 // ImagePrompt represents the prompt for image generation.
 type ImagePrompt struct {
-	Prompt      string `json:"prompt"`
-	AspectRatio string `json:"aspect_ratio"`
-	Resolution  string `json:"resolution"`
+	Prompt    string `json:"prompt"`
+	ImageSize string `json:"image_size"`
 }
 
 // Job represents a UGC content generation job.

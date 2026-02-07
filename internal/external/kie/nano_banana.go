@@ -22,10 +22,6 @@ const (
 	AspectRatio4x3  = "4:3"
 	AspectRatio3x4  = "3:4"
 
-	// Resolutions
-	Resolution1K = "1K"
-	Resolution2K = "2K"
-
 	// Output formats
 	FormatPNG  = "png"
 	FormatJPG  = "jpg"
@@ -52,10 +48,10 @@ type NanoBananaClient struct {
 }
 
 // NanoInput represents the input parameters for image generation
+// google/nano-banana uses "image_size" (not "aspect_ratio") per KIE docs
 type NanoInput struct {
 	Prompt       string `json:"prompt"`
-	AspectRatio  string `json:"aspect_ratio"`
-	Resolution   string `json:"resolution"`
+	ImageSize    string `json:"image_size"`
 	OutputFormat string `json:"output_format"`
 }
 
@@ -255,17 +251,16 @@ func (c *NanoBananaClient) WaitForCompletion(ctx context.Context, taskId string,
 }
 
 // GenerateImage is a convenience method that creates a task, waits for completion, and returns the image URL
-func (c *NanoBananaClient) GenerateImage(ctx context.Context, prompt string, aspectRatio string) (string, error) {
-	if aspectRatio == "" {
-		aspectRatio = AspectRatio16x9
+func (c *NanoBananaClient) GenerateImage(ctx context.Context, prompt string, imageSize string) (string, error) {
+	if imageSize == "" {
+		imageSize = AspectRatio16x9
 	}
 
 	req := CreateTaskRequest{
 		Model: ModelNanoBananaPro,
 		Input: NanoInput{
 			Prompt:       prompt,
-			AspectRatio:  aspectRatio,
-			Resolution:   Resolution1K,
+			ImageSize:    imageSize,
 			OutputFormat: FormatPNG,
 		},
 	}

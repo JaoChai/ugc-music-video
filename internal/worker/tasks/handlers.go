@@ -534,13 +534,11 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 		}
 
 		// Update job with image_prompt
-		// AspectRatio and Resolution are hardcoded - LLM doesn't have knowledge about API constraints
-		const defaultAspectRatio = "16:9"
-		const defaultResolution = "1K"
+		// ImageSize is hardcoded to 16:9 — google/nano-banana uses "image_size" field
+		const defaultImageSize = "16:9"
 		job.ImagePrompt = &models.ImagePrompt{
-			Prompt:      output.Prompt,
-			AspectRatio: defaultAspectRatio,
-			Resolution:  defaultResolution,
+			Prompt:    output.Prompt,
+			ImageSize: defaultImageSize,
 		}
 		if err := deps.JobRepo.Update(ctx, job); err != nil {
 			logger.Error("failed to update job with image prompt", zap.Error(err))
@@ -557,8 +555,7 @@ func HandleGenerateImage(deps *Dependencies) asynq.HandlerFunc {
 			Model: kie.ModelNanoBananaPro,
 			Input: kie.NanoInput{
 				Prompt:       output.Prompt,
-				AspectRatio:  defaultAspectRatio,
-				Resolution:   defaultResolution,
+				ImageSize:    defaultImageSize,
 				OutputFormat: kie.FormatPNG,
 			},
 		}
