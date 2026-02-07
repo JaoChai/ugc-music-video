@@ -38,14 +38,19 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
-      onRehydrateStorage: () => {
-        return (_state, _error) => {
-          // Cleanup legacy localStorage key from dual-write pattern
-          localStorage.removeItem('auth_token')
-          // Mark hydration as complete
-          useAuthStore.setState({ _hasHydrated: true })
-        }
-      },
     }
   )
 )
+
+// Zustand v5: register hydration callback AFTER store is created
+// Using onRehydrateStorage with useAuthStore.setState inside the callback
+// can fail in v5 because the store variable may not be assigned yet
+useAuthStore.persist.onFinishHydration(() => {
+  localStorage.removeItem('auth_token')
+  useAuthStore.setState({ _hasHydrated: true })
+})
+
+// If already hydrated (e.g. synchronous storage), set immediately
+if (useAuthStore.persist.hasHydrated()) {
+  useAuthStore.setState({ _hasHydrated: true })
+}
