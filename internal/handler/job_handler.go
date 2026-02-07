@@ -52,6 +52,7 @@ func (h *JobHandler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.Hand
 		jobs.GET("", h.List)
 		jobs.GET("/:id", h.GetByID)
 		jobs.DELETE("/:id", h.Cancel)
+		jobs.POST("/:id/youtube-upload", h.RetryYouTubeUpload)
 	}
 }
 
@@ -330,4 +331,50 @@ func (h *JobHandler) Cancel(c *gin.Context) {
 	)
 
 	response.NoContent(c)
+}
+
+// RetryYouTubeUpload enqueues a YouTube upload task for a completed job.
+func (h *JobHandler) RetryYouTubeUpload(c *gin.Context) {
+	userID, ok := middleware.GetUserIDFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "user not authenticated")
+		return
+	}
+
+	jobIDStr := c.Param("id")
+	jobID, err := uuid.Parse(jobIDStr)
+	if err != nil {
+		response.BadRequest(c, "invalid job ID format")
+		return
+	}
+
+	// Get job (service checks ownership via userID)
+	job, err := h.jobService.GetByID(c.Request.Context(), userID, jobID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Only allow for completed jobs with video URL
+	if job.Status != models.StatusCompleted {
+		response.BadRequest(c, "job must be completed to upload to YouTube")
+		return
+	}
+	if job.VideoURL == nil || *job.VideoURL == "" {
+		response.BadRequest(c, "job has no video to upload")
+		return
+	}
+
+	// Enqueue YouTube upload task
+	if err := worker.EnqueueTask(c.Request.Context(), h.asynqClient, worker.TypeUploadYouTube, jobID); err != nil {
+		h.logger.Error("failed to enqueue YouTube upload task", zap.Error(err))
+		response.InternalServerError(c, "failed to enqueue YouTube upload")
+		return
+	}
+	h.logger.Info("YouTube upload enqueued",
+		zap.String("job_id", jobIDStr),
+		zap.String("user_id", userID.String()),
+	)
+
+	response.Success(c, map[string]string{"message": "YouTube upload enqueued"})
 }
