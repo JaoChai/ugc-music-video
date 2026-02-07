@@ -25,12 +25,20 @@ api.interceptors.request.use(
 )
 
 // Response interceptor for handling errors
+let isRedirecting = false
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      useAuthStore.getState().logout()
-      window.location.href = '/login'
+      const url = error.config?.url || ''
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register')
+
+      if (!isAuthEndpoint && !isRedirecting) {
+        isRedirecting = true
+        useAuthStore.getState().logout()
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
